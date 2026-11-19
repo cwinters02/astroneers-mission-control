@@ -523,7 +523,7 @@ const PLAYER_RECORDS=[
  ['🎯','Most shots on goal','skshots'],['🧲','Most takeaways','sktakeaways'],['🛡️','Most blocked shots','skbs'],
  ['🧤','Most saves','glsaves']
 ];
-function playerRecords(player){
+function playerRecords(player,showName=false){
  const names=new Set(player?[player.name]:P.map(p=>p.name));
  const rows=tracked3v3().flatMap(m=>mplayers(m).filter(x=>names.has(x.name)).map(x=>({m,x})));
  const records=PLAYER_RECORDS.map(([icon,label,key])=>{
@@ -540,7 +540,7 @@ function playerRecords(player){
    }
    return `<details class="record-tie"><summary><span aria-hidden="true">${icon}</span> <b>${label}</b> · ${best} <span class="small muted">· ${ties.length} tied performances</span></summary>${ties.map(gameButton).join('')}</details>`;
  }).join('');
- return `<section class="card s4"><div class="h"><h2><span aria-hidden="true">🌟</span> ${player?'Player Records':'Individual Records'}</h2><span class="pill">Single game · Tracked 3v3</span></div>${records||'<p>No verified single-game highs for this player yet.</p>'}</section>`;
+ return `<section class="card s4"><div class="h"><h2><span aria-hidden="true">🌟</span> ${player?'Player Records':'Individual Records'}${showName?' · '+esc(dn(player.name)):''}</h2><span class="pill">Single game · Tracked 3v3</span></div>${records||'<p>No verified single-game highs for this player yet.</p>'}</section>`;
 }
 function teamHonors(games){
  const titles=games.filter(m=>competition(m)==='title');
@@ -769,14 +769,14 @@ const CLUB_TABS={
  'Goalie · Games':['glgp','glwins','gllosses']
 };
 let tab='Skater · Basic',sortK='skpoints',perGameT=false,rawQ='',statsScope='club';
-function clubTableStat(p,rows,k){
+function clubTableStat(p,rows,k,perGame=perGameT){
  const goalie=p.fullTimeGoalie||p.primary==='goalie';
  if(k==='overall')return {value:(goalie?p.glDesk:p.skDesk)?.overall};
  if(k==='skgp'||k==='glgp')return {value:rows.length};
  if(['wins','losses','glwins','gllosses'].includes(k))
    return {value:rows.filter(({m})=>result(m).w===(k==='wins'||k==='glwins')).length};
  const formulas={
-   skpoints:[['skgoals','skassists'],([g,a],count)=> (g+a)/(perGameT?count:1)],
+   skpoints:[['skgoals','skassists'],([g,a],count)=> (g+a)/(perGame?count:1)],
    skpointspg:[['skgoals','skassists'],([g,a],count)=>(g+a)/count],
    skshotspg:[['skshots'],([shots],count)=>shots/count],
    dekespg:[['skdekes'],([dekes],count)=>dekes/count],
@@ -793,7 +793,7 @@ function clubTableStat(p,rows,k){
    penSv:[['glpensaves','glpenshots'],([a,b])=>b>0?a/b:null],
    glgaa:[['glga','toiseconds'],([a,b])=>b>0?3600*a/b:null]
  };
- const [keys,calculate]=formulas[k]||[[k],([value],count)=>value/(perGameT?count:1)];
+ const [keys,calculate]=formulas[k]||[[k],([value],count)=>value/(perGame?count:1)];
  const available=rows.filter(({x})=>keys.every(key=>x[key]!=null&&Number.isFinite(Number(x[key]))));
  const sums=keys.map(key=>available.reduce((total,{x})=>total+n(x[key]),0));
  const value=available.length&&(k!=='glgaa'||available.length===rows.length)?calculate(sums,available.length):null;
@@ -836,7 +836,7 @@ function vStats(){
 }
 function short(k){const S={cSk:'Coach OVR',style:'Coach style',cGl:'Coach G OVR',ovr:'Astroneers base OVR',arch:'Club style',govr:'Astroneers G base OVR',totalGP:'GP',skgp:'Sk GP',skgoals:'G',skassists:'A',skpoints:'P',skpointspg:'P/GP',skplusmin:'+/-',skpim:'PIM',skshots:'Shots',skshotpct:'Sht%',toipg:'TOI',skppg:'PPG',skshg:'SHG',skgwg:'GWG',skhattricks:'Hat',skshotattempts:'Sht att',skshotonnetpct:'On net%',skshotspg:'Sht/GP',skbrkgoals:'Brk G',skbreakaways:'Brk att',skbreakawaypct:'Brk%',skpenaltyshotgoals:'PS G',skpenaltyattempts:'PS att',skpenaltyshotpct:'PS%',skscrnchances:'Scrn ch',skscrngoals:'Scrn G',skdeflections:'Defl',skpossession:'Poss',posspg:'Poss/GP',skpasses:'Pass',skpassattempts:'Pass att',skpasspct:'Pass%',sksaucerpasses:'Saucer',skdekes:'Dekes',skdekesmade:'Dekes md',dekePct:'Deke success %',dekespg:'Dekes / Game',skfo:'FO',skfow:'FOW',skfol:'FOL',skfop:'FO%',skhits:'Hits',skhitspg:'Hits/GP',skbs:'BS',sktakeaways:'TK',skgiveaways:'GV',tkgv:'TK:GV',skinterceptions:'INT',skpkclearzone:'PK clr',skpenaltiesdrawn:'Drawn',skoffsides:'Offside',skoffsidespg:'Off/GP',skfights:'Fights',skfightswon:'Fights W',wins:'W',losses:'L',otl:'OTL',winpct:'Win%',record:'Record',lwgp:'LW GP',rwgp:'RW GP',cgp:'C GP',dgp:'D GP',glgp:'G GP',gamesCompleted:'GC',gamesCompletedFC:'GC FC',DNF:'DNF',lwDNF:'LW DNF',rwDNF:'RW DNF',cDNF:'C DNF',dDNF:'D DNF',lwQuitDisc:'LW quit',rwQuitDisc:'RW quit',cQuitDisc:'C quit',dQuitDisc:'D quit',playerDNF:'Plyr DNF',playerQuitDisc:'Plyr quit',clientPlatform:'Platform',glwins:'W',gllosses:'L',glotl:'OTL',glgaa:'GAA',svPct:'SV%',glshots:'SA',glsaves:'Saves',glga:'GA',glso:'SO',gltoipg:'TOI',glbrksaves:'Brk SV',glbrkshots:'Brk SA',brkSv:'Brk SV%',glpensaves:'PS SV',glpenshots:'PS SA',penSv:'PS SV%',glsosaves:'SO SV',glsoshots:'SO SA',gldsaves:'D-saves',glpokechecks:'Poke',glpkclearzone:'PK clr',glsoperiods:'SO per',glwinpct:'Win%',glgc:'GC',glDNF:'DNF',glDNFmm:'DNF MM',glQuitDisc:'Quit',glwinnerByDnf:'W by DNF',glprevwins:'Prev W',glprevso:'Prev SO'};return S[k]||(LABEL[k]||{l:k}).l}
 
-let cmpA=null,cmpB=null;
+let cmpA=null,cmpB=null,compareSection='stats',compareScope='club',comparePerGame=true;
 function compareClub(p){
  const rows=recordedPlayerRows(p),sum=k=>rows.length&&rows.every(r=>r.x[k]!=null)?rows.reduce((a,r)=>a+n(r.x[k]),0):null;
  const rate=k=>sum(k)==null||!rows.length?null:sum(k)/rows.length;
@@ -846,18 +846,43 @@ function compareClub(p){
  const passing=passAttempts>0?100*passingRows.reduce((total,{x})=>total+n(x.skpasses),0)/passAttempts:null;
  return {gp:rows.length,points:sum('skgoals')==null||sum('skassists')==null||!rows.length?null:(sum('skgoals')+sum('skassists'))/rows.length,goals:rate('skgoals'),assists:rate('skassists'),shots:rate('skshots'),shooting:ratio('skgoals','skshots'),passing,passingGames:passingRows.length,takeaways:rate('sktakeaways'),giveaways:rate('skgiveaways'),hits:rate('skhits'),blocks:rate('skbs')};
 }
+function compareStatTables(players,career,goalie=false){
+ const tabs=career?TABS:CLUB_TABS,roles=Object.entries(tabs).filter(([label])=>label.startsWith(goalie?'Goalie':'Skater'));
+ const samples=players.map(recordedPlayerRows);
+ const renderValue=(p,index,key)=>{
+   if(career)return p[key]==null?'Unavailable':fmt(p,key,comparePerGame);
+   const sample=samples[index],cell=clubTableStat(p,sample,key,comparePerGame);
+   if(cell.value==null)return 'Unavailable';
+   const value=LABEL[key]?.t==='sv'?svp(cell.value,1):fmt({[key]:cell.value,gl:goalie?sample.length:0},key,false);
+   return value+(cell.coverage<sample.length?`<br><span class="small muted">${cell.coverage} of ${sample.length} games</span>`:'');
+ };
+ return roles.map(([label,keys])=>`<section class="card s2"><h2>${esc(label)}</h2><div class="tscroll"><table><thead><tr><th scope="col">Stat</th>${players.map(p=>`<th scope="col">${esc(dn(p.name))}</th>`).join('')}</tr></thead><tbody>${keys.map(key=>`<tr><th scope="row">${esc(key==='overall'?'Overall':key==='skpasspct'?'Pass %':LABEL[key]?.l||short(key))}</th>${players.map((p,i)=>`<td>${renderValue(p,i,key)}</td>`).join('')}</tr>`).join('')}</tbody></table></div></section>`).join('');
+}
 function vCompare(){
- const sk=P.filter(p=>!p.fullTimeGoalie&&p.primary!=='goalie');if(!sk.find(p=>p.name===cmpA))cmpA=sk[0]?.name;if(!sk.find(p=>p.name===cmpB))cmpB=sk[1]?.name||cmpA;
- const A=sk.find(p=>p.name===cmpA),B=sk.find(p=>p.name===cmpB);if(!A||!B)return '<div class="card s4">No verified skater data.</div>';
+ const sk=P.filter(p=>!p.fullTimeGoalie&&p.primary!=='goalie');
+ const goalies=P.filter(p=>p.fullTimeGoalie||p.primary==='goalie');
+ if(!sk.find(p=>p.name===cmpA))cmpA=sk[0]?.name;
+ if(!sk.find(p=>p.name===cmpB))cmpB=sk[1]?.name||cmpA;
+ const A=sk.find(p=>p.name===cmpA),B=sk.find(p=>p.name===cmpB);
+ if(!A||!B)return '<div class="card s4">No verified skater data.</div>';
+ const players=[A,B],selected=[...new Set(players)],career=compareScope==='career';
  const opt=v=>sk.map(p=>`<option value="${esc(p.name)}" ${p.name===v?'selected':''}>${esc(dn(p.name))}</option>`).join('');
- const ca=compareClub(A),cb=compareClub(B),show=(v,pct=false)=>v==null?'Unavailable':v.toFixed(2)+(pct?'%':'');
- const showStat=(stats,key,pct)=>key==='passing'&&stats.passing!=null
-   ? `${stats.passing.toFixed(1)}%<br><span class="small muted">${stats.passingGames} of ${stats.gp} games</span>`
-   : show(stats[key],pct);
- let h=`<section class="card s4"><div class="h"><h2>Compare</h2><span class="pill">Club Stats · 3v3</span></div><div class="cmp-head"><select id="cmpA" aria-label="First player">${opt(cmpA)}</select><span class="vs">VS</span><select id="cmpB" aria-label="Second player">${opt(cmpB)}</select></div><p class="small muted">Recorded Astroneers games only. ${esc(dn(A.name))}: ${ca.gp} games. ${esc(dn(B.name))}: ${cb.gp} games. Pass % uses games with both completed passes and pass attempts. Career totals are separate.</p></section>`;
- const groups=[['Scoring',[['Points / Game','points'],['Goals / Game','goals'],['Assists / Game','assists'],['Shots / Game','shots'],['Shooting %','shooting',true]]],['Puck Play',[['Pass %','passing',true],['Takeaways / Game','takeaways'],['Giveaways / Game','giveaways'],['Hits / Game','hits'],['Blocks / Game','blocks']]]];
- for(const [label,keys]of groups)h+=`<section class="card s2"><h2>${label}</h2><div class="tscroll"><table><thead><tr><th>Stat</th><th>${esc(dn(A.name))}</th><th>${esc(dn(B.name))}</th></tr></thead><tbody>${keys.map(([l,k,pct])=>`<tr><td>${l}</td><td>${showStat(ca,k,pct)}</td><td>${showStat(cb,k,pct)}</td></tr>`).join('')}</tbody></table></div></section>`;
- for(const p of P.filter(p=>p.fullTimeGoalie||p.primary==='goalie')){const r=recordedRosterStats(p);h+=`<section class="card s4"><div class="h"><h2>${esc(dn(p.name))} · Starting Goalie</h2><span class="pill">${r.gp} club games</span></div><div class="stats">${tile('Save %',r.svPct==null?'Unavailable':svp(r.svPct,1))}${tile('Saves',r.saves??'Unavailable')}${tile('Shots Faced',r.shotsAgainst??'Unavailable')}${tile('GA / Game',r.gaPerGame==null?'Unavailable':r.gaPerGame.toFixed(2))}</div>${gaaNote(r)}<p class="small muted">Goalie stats are separate from skater comparisons.</p></section>`;}
+ const buttons=(items,active,action,label)=>`<div class="chips" role="group" aria-label="${label}">${items.map(([id,text])=>`<button class="chip" data-compare-${action}="${id}" aria-pressed="${active===id}">${text}</button>`).join('')}</div>`;
+ let h=`<section class="card s4"><h2>Compare</h2><div class="cmp-head"><select id="cmpA" aria-label="First player">${opt(cmpA)}</select><span class="vs">VS</span><select id="cmpB" aria-label="Second player">${opt(cmpB)}</select></div>${buttons([['stats','Stats'],['shots','Shot Locations'],['records','Records'],['trends','Trends'],['games','Games'],['lineup','Line Chemistry'],['coach','Coach Reports']],compareSection,'section','Comparison sections')}</section>`;
+ if(compareSection==='shots')return h+[...selected,...goalies].map(shotAnalysis).join('');
+ if(compareSection==='records')return h+[...selected,...goalies].map(p=>playerRecords(p,true)).join('')+trackedRecords();
+ if(compareSection==='trends')return h+[...selected,...goalies].map(p=>leagueComparison(p)+playerAnalytics(p)).join('');
+ if(compareSection==='games')return h+[...selected,...goalies].map(p=>`<section class="card s4"><h2>${esc(dn(p.name))} · Games</h2>${recordedPlayerRows(p).map(({m})=>matchRow(m)).join('')||'<p>No verified games.</p>'}</section>`).join('');
+ if(compareSection==='lineup')return h+lineChemistry();
+ if(compareSection==='coach')return h+[...selected,...goalies].map(p=>scout(p.name)).filter(Boolean).map(overviewCoachCard).join('');
+ const ca=compareClub(A),cb=compareClub(B);
+ h+=`<section class="card s4"><div class="h"><h2>${career?'Career Stats':'Club Stats · 3v3'}</h2>${buttons([['club','Astroneers 3v3'],['career','Career Stats']],compareScope,'scope','Comparison stat scope')}</div>${buttons([['0','Totals'],['1','Per game']],comparePerGame?'1':'0','rate','Comparison stat display')}<p class="small muted">${career?'Historical Astroneers club report. May include other modes.':`Recorded Astroneers games only. ${esc(dn(A.name))}: ${ca.gp} games. ${esc(dn(B.name))}: ${cb.gp} games. Rates use games with the required fields, with partial coverage shown under the value.`}</p></section>`;
+ h+=compareStatTables(players,career);
+ for(const p of goalies){
+   const r=recordedRosterStats(p);
+   h+=`<section class="card s4"><div class="h"><h2>${esc(dn(p.name))} · Starting Goalie</h2></div><p class="small muted">Goalie stats are separate from skater comparisons.</p>${career?'':`<div class="stats">${tile('GA / Game',r.gaPerGame==null?'Unavailable':r.gaPerGame.toFixed(2))}</div>${gaaNote(r)}`}</section>`;
+   h+=compareStatTables([p],career,true);
+ }
  return h;
 }
 
@@ -1223,6 +1248,9 @@ document.addEventListener('click',e=>{
   const pk=e.target.closest('[data-pick]'); if(pk){selP=pk.dataset.pick;render(true);return}
   const pg=e.target.closest('[data-pg]'); if(pg){perGameP=pg.dataset.pg==='1';render(true);return}
   const statsToggle=e.target.closest('[data-stat-scope]'); if(statsToggle){statsScope=statsToggle.dataset.statScope;render(true);return}
+  const cmpSection=e.target.closest('[data-compare-section]');if(cmpSection){compareSection=cmpSection.dataset.compareSection;render(true);return}
+  const cmpScope=e.target.closest('[data-compare-scope]');if(cmpScope){compareScope=cmpScope.dataset.compareScope;render(true);return}
+  const cmpRate=e.target.closest('[data-compare-rate]');if(cmpRate){comparePerGame=cmpRate.dataset.compareRate==='1';render(true);return}
   const pgt=e.target.closest('[data-pgt]'); if(pgt){perGameT=pgt.dataset.pgt==='1';render(true);return}
   const tb=e.target.closest('[data-tab]'); if(tb){tab=tb.dataset.tab;render(true);return}
   const th=e.target.closest('th[data-sort]'); if(th){sortK=th.dataset.sort;render(true);return}
