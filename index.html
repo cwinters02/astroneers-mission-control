@@ -455,7 +455,7 @@ function vOverview(){
   
   h+=`<div class="card s2" style="animation-delay:.18s"><div class="h"><h2>Recent games</h2><a class="pill i" href="#matches">All games</a></div>
     ${ms.length?ms.slice(0,5).map(matchRow).join(''):'<div class="empty">No games tracked yet. They appear after the next refresh.</div>'}</div>`;
-  h+=`<div class="card s2" style="animation-delay:.2s"><div class="h"><h2>Club hot zones</h2>${zoneToggle('club')}</div>${zonesHtml(clubZones(),'club')}</div>`;
+  h+=shotAnalysis()+trackedRecords()+lineChemistry();
   if(cht.length) h+=`<div class="card s2" style="animation-delay:.22s"><div class="h"><h2>Match trends</h2><span class="pill">${cht.length} signals · ChelHead</span></div>${cht.map((i,k)=>insightRow(i,'t'+k)).join('')}<div class="small muted" style="margin-top:10px">As of ${chAt('matchTrends')}.</div></div>`;
   h+=`<div class="card s4" style="animation-delay:.24s"><div class="h"><h2>Roster</h2><span class="pill">Tap a player for every stat</span></div><div class="tiles">${byPts.map(rosterTile).join('')}</div></div>`;
   if(false) h+=`<div class="card s2" style="animation-delay:.28s"><div class="h"><h2>Coach's signals</h2><span class="pill">From career and recent games</span></div>${signals().map(s=>`<div class="row"><span class="bar" style="background:${s.c}"></span><div class="grow"><b>${s.t}</b><div class="small muted">${s.d}</div></div><span class="v" style="color:${s.c}">${s.v}</span></div>`).join('')}</div>`;
@@ -492,6 +492,31 @@ function rosterTile(p){const c=col(p.name),a=ART[p.idx%4];const canG=p.gl>0,mode
   <div class="art" style="background:linear-gradient(180deg,${a[0]},${a[1]})"><svg width="100%" height="100%" viewBox="0 0 260 118" preserveAspectRatio="none" style="position:absolute;inset:0" aria-hidden="true"><path d="M0 95 Q65 70 130 88 T260 80 V118 H0Z" fill="rgba(255,255,255,.06)"/></svg><img src="logo.png" alt="" style="position:absolute;right:10px;bottom:-14px;width:96px;height:96px;opacity:.22"><span class="init">${esc(ini(p.name))}</span><span class="pos" style="display:flex;gap:6px">${style?`<span class="pill" style="background:rgba(0,0,0,.35);color:var(--cream)">${esc(style)}</span>`:''}<span class="pill" style="background:rgba(0,0,0,.35);color:#fff">${posTxt}</span></span></div>
   <div class="body"><div class="t"><div style="min-width:0"><h3>${esc(dn(p.name))}</h3><div class="sub">${sub1}</div><div class="sub">${sub2}</div></div><div class="dials">${gm?dial(p.cGl,50,'OVERALL'):dial(p.cSk,50,'OVERALL')}</div></div>
   <div class="small muted">Night Grade: <b>${letterGrade(gm?p.glDesk.form:p.skDesk.form)}</b> · ${esc(sessionLabel(lastSession()))}</div>${flip}<div class="stats">${stats}</div>${gm?gaaNote(recorded):''}</div></div>`}
+function tracked3v3(){return (M?.matches||[]).filter(m=>Number(m.gameType)===206&&m.confirmed3v3!==false&&(m.clubId==null||String(m.clubId)==='69789'));}
+function trackedRecords(){
+ const games=tracked3v3();
+ const splits=[['All tracked games',games],['Regular season',games.filter(m=>['regular','title'].includes(competition(m)))],['Club Finals',games.filter(m=>competition(m)==='playoffs')]];
+ const highs=[['Most goals',m=>m.us.score],['Most shots',m=>m.us.shots],['Largest win margin',m=>result(m).w?m.us.score-m.opp.score:null]];
+ const records=highs.map(([label,metric])=>{
+   const best=games.reduce((a,m)=>metric(m)!=null&&(!a||metric(m)>metric(a))?m:a,null);
+   return best?`<button class="row mrow" data-match="${esc(best.id)}"><span class="grow"><b>${label}</b><span class="small muted"> · vs ${esc(best.opp.name)}</span></span><b>${metric(best)}</b></button>`:'';
+ }).join('');
+ return `<section class="card s4"><div class="h"><h2>Astroneers Records</h2><span class="pill">Tracked 3v3</span></div><div class="stats">${splits.map(([label,games])=>{const {w,l,o}=form(games);return tile(label,games.length?`${w}–${l}–${o}`:'Unavailable');}).join('')}</div>${records}</section>`;
+}
+function lineChemistry(){
+ const names=new Set(P.map(p=>p.name)),groups=new Map();
+ for(const m of tracked3v3()){
+   const skaters=[...new Set(mplayers(m).filter(x=>names.has(x.name)&&x.position!=='goalie'&&['skgoals','skassists','skshots','sktakeaways','skgiveaways'].some(k=>n(x[k])>0)).map(x=>x.name))].sort();
+   const pairs=skaters.flatMap((a,i)=>skaters.slice(i+1).map(b=>[a,b]));
+   for(const players of pairs){
+     const key=players.join('|');
+     if(!groups.has(key))groups.set(key,{players,games:[]});
+     groups.get(key).games.push(m);
+   }
+ }
+ const rows=[...groups.values()].sort((a,b)=>b.games.length-a.games.length);
+ return `<section class="card s4"><h2>Line Chemistry</h2><p class="small muted">Team results when both players recorded an active skater appearance in the same game. Goal differential is for the full game.</p>${rows.length?`<div class="tscroll"><table><thead><tr><th>Skater pair</th><th>GP</th><th>W–L–OTL</th><th>Goals for / against</th><th>Goal diff. / game</th></tr></thead><tbody>${rows.map(({players,games})=>{const {w,l,o,gf,ga,n}=form(games);return `<tr><td>${players.map(name=>esc(dn(name))).join(' + ')}</td><td>${n}</td><td>${w}–${l}–${o}</td><td>${gf} / ${ga}</td><td>${gf>ga?'+':''}${((gf-ga)/n).toFixed(2)}</td></tr>`;}).join('')}</tbody></table></div>`:'<p>No verified skater pairs yet.</p>'}</section>`;
+}
 function clubProfile(){const c=D.clubStats,f=form(M?.matches||[]),latest=form(lastSession());
  const items=[['Club','Astroneers · 69789'],['Mode','EASHL 3v3'],['Playoffs tracked',(M?.matches||[]).filter(m=>competition(m)==='playoffs').length],['Regular-season games',(M?.matches||[]).filter(m=>competition(m)==='regular').length],['Verified division-title games',(M?.matches||[]).filter(m=>competition(m)==='title').length],['Tracked record',`${f.w}–${f.l}–${f.o}`],['Verified games tracked',f.n],['Goals for / against',`${f.gf} / ${f.ga}`],['Goals / game',f.n?f.gfpg.toFixed(2):'Unavailable'],['Goals against / game',f.n?f.gapg.toFixed(2):'Unavailable'],['Shots for / against',`${f.sf} / ${f.sa}`],['Shot share',f.sf+f.sa?pct1(f.sf/(f.sf+f.sa)):'Unavailable'],['Latest full night',`${latest.w}–${latest.l+latest.o} · ${latest.n} games`],['Roster','Moose · Flappy · Gordy · Gumbo'],['Starting goalie','Gumbo Slice Jr']];
  return `<p class="small muted">Club profile uses our saved, confirmed 3v3 history. This is a tracked sample, not a complete EA career or season record. Player box-score gaps remain under review.</p><div class="stats">${items.map(([k,v])=>tile(k,esc(v))).join('')}</div><details style="margin-top:16px"><summary>EA season fields · source reports zeros</summary><div class="stats" style="margin-top:12px">${[['Reported division',c.currentDivision??'Unavailable'],['EA season record',c.record??'Unavailable'],['EA ranking points',c.rankingPoints??'Unavailable'],['Cups won',c.totalCupsWon??'Unavailable']].map(([k,v])=>tile(k,esc(v))).join('')}</div><p class="small muted">Kept separate from tracked 3v3 results; no season values inferred from game history.</p></details>`}
@@ -507,20 +532,34 @@ function signals(){
   return out;
 }
 /* hot zones */
-let zoneMode={club:'shots'};
-function zoneToggle(id){const m=zoneMode[id]||'shots';return `<div class="chips" role="group" aria-label="Hot zone view">${[['shots','Shots'],['goals','Goals'],['pct','Sh %']].concat(id!=='club'&&id.endsWith(':g')?[]:[]).map(([v,l])=>`<button class="chip" data-zone="${esc(id)}" data-mode="${v}" aria-pressed="${m===v}">${l}</button>`).join('')}</div>`}
-function sumZones(list,pre){const ice={},net={};ICE.forEach(z=>{ice[z[2]]=[0,0]});NET.forEach(z=>{net[z[1]]=[0,0]});
-  list.forEach(p=>{ICE.forEach(z=>{ice[z[2]][0]+=n(p[`${pre}ShotsLocationOnIce${z[2]}`]);ice[z[2]][1]+=n(p[`${pre}GoalsLocationOnIce${z[2]}`])});NET.forEach(z=>{net[z[1]][0]+=n(p[`${pre}ShotsLocationOnNet${z[1]}`]);net[z[1]][1]+=n(p[`${pre}GoalsLocationOnNet${z[1]}`])})});return {ice,net}}
-function clubZones(){return sumZones(P,'sk')}
-function zonesHtml(z,id,goalie){const m=zoneMode[id]||'shots';
-  const val=a=>m==='shots'?a[0]:m==='goals'?a[1]:(a[0]>=5?100*a[1]/a[0]:0);
-  const show=a=>m==='pct'?(a[0]?(100*a[1]/a[0]).toFixed(0)+'%':'–'):val(a);
-  const iv=Object.values(z.ice).map(val),nv=Object.values(z.net).map(val);const imx=Math.max(...iv,1),nmx=Math.max(...nv,1);
-  const hotI=Object.keys(z.ice).filter(k=>val(z.ice[k])>0&&val(z.ice[k])>=.7*imx), hotN=Object.keys(z.net).filter(k=>val(z.net[k])>0&&val(z.net[k])>=.7*nmx);
-  const noun=goalie?(m==='goals'?'goals against':m==='pct'?'goals per shot against':'shots against'):(m==='goals'?'goals':m==='pct'?'shooting %':'shots');
+let zoneMode={},zoneView={};
+function zoneToggle(id,team){
+ const controls=(items,selected,attribute,label)=>`<div class="chips" role="group" aria-label="${label}">${items.map(([v,l])=>`<button class="chip" ${attribute}="${esc(id)}" data-mode="${v}" aria-pressed="${selected===v}">${l}</button>`).join('')}</div>`;
+ return controls([['shots','Shots'],['goals','Goals']],zoneMode[id]||'shots','data-zone','Shot location metric')+
+ controls([['total','Totals'],['rate',team?'Per skater appearance':'Per game'],['pct','Efficiency %'],['share','Zone share %']],zoneView[id]||'total','data-zone-view','Shot location display');
+}
+function shotAnalysis(p){
+ const goalie=p&&(p.fullTimeGoalie||p.primary==='goalie'),pre=goalie?'gl':'sk',id=p?.name||'club';
+ const field=(metric,where,k)=>`${pre}${metric}LocationOn${where}${k}`;
+ const list=(p?[p]:P).filter(player=>n(player[pre+'gp'])>0&&[...ICE.map(q=>['Ice',q[2]]),...NET.map(q=>['Net',q[1]])].every(([where,k])=>['Shots','Goals'].every(metric=>{
+   const v=player[field(metric,where,k)];return v!=null&&Number.isFinite(Number(v));
+ })));
+ const gp=list.reduce((sum,player)=>sum+n(player[pre+'gp']),0);
+ const zones=(layout,where,index)=>Object.fromEntries(layout.map(q=>[q[index],['Shots','Goals'].map(metric=>list.reduce((sum,player)=>sum+n(player[field(metric,where,q[index])]),0))]));
+ return `<section class="card s4"><div class="h"><h2>${goalie?'Shot Location Against':'Shot Location Analysis'}${p?' · '+esc(dn(p.name)):''}</h2><span class="pill">Club report</span></div><p class="small muted">${p?'Astroneers club-report totals for this role.':'Combined club-report locations for current roster skaters.'} May include historical modes. Saved 3v3 box scores do not include shot locations.</p>${gp?zoneToggle(id,!p)+zonesHtml({ice:zones(ICE,'Ice',2),net:zones(NET,'Net',1)},id,goalie,gp):'<p>No verified shot location fields are available.</p>'}</section>`;
+}
+function zonesHtml(z,id,goalie,gp){
+ const m=zoneMode[id]||'shots',view=zoneView[id]||'total',idx=m==='goals'?1:0;
+ const total=map=>Object.values(map).reduce((sum,a)=>sum+a[idx],0);
+ const value=den=>a=>view==='pct'?(a[0]>0?100*a[1]/a[0]:null):view==='share'?(den>0?100*a[idx]/den:null):view==='rate'?a[idx]/gp:a[idx];
+ const iceValue=value(total(z.ice)),netValue=value(total(z.net));
+ const show=v=>v==null?'–':view==='total'?v:view==='rate'?v.toFixed(2):v.toFixed(1)+'%';
+  const iv=Object.values(z.ice).map(iceValue),nv=Object.values(z.net).map(netValue);const imx=Math.max(...iv,1),nmx=Math.max(...nv,1);
+  const hotI=Object.keys(z.ice).filter(k=>iceValue(z.ice[k])>0&&iceValue(z.ice[k])>=.7*imx), hotN=Object.keys(z.net).filter(k=>netValue(z.net[k])>0&&netValue(z.net[k])>=.7*nmx);
+  const noun=view==='pct'?(goalie?'opponent shooting %':'shooting %'):(m==='goals'?'goals':'shots')+(goalie?' against':'');
   const cell=(v,mx)=>{const t=mx?v/mx:0;const rgb=heatRGB(t);return {bg:`rgba(${rgb.join(',')},${(.25+.7*t).toFixed(2)})`,ink:t>.35?heatInk(rgb):'#f4f1e4'}};
   const tag='<em class="hot">HOT</em>';
-  const rink=ICE.map(q=>{const a=z.ice[q[2]],c=cell(val(a),imx),hot=hotI.includes(String(q[2]));return `<div class="z${hot?' is-hot':''}" style="grid-area:${q[3]};background:${c.bg};color:${c.ink}">${hot?tag:''}<b>${show(a)}</b><span style="color:inherit;opacity:.85">${q[1]}</span></div>`}).join('');
+  const rink=ICE.map(q=>{const a=z.ice[q[2]],v=iceValue(a),c=cell(v,imx),hot=hotI.includes(String(q[2]));return `<div class="z${hot?' is-hot':''}" style="grid-area:${q[3]};background:${c.bg};color:${c.ink}">${hot?tag:''}<b>${show(v)}</b><span style="color:inherit;opacity:.85">${q[1]}</span></div>`}).join('');
   // goal mouth zones: [net zone #, x, y, w, h]
   const GZ=[[1,38,40,88,56],[2,134,40,88,56],[3,38,104,64,58],[5,108,114,40,48],[4,154,104,64,58]];
   const goal=`<svg class="goal" viewBox="0 0 256 186" role="img" aria-label="Hockey goal showing ${noun} by net zone">
@@ -528,14 +567,14 @@ function zonesHtml(z,id,goalie){const m=zoneMode[id]||'shots';
     <ellipse cx="128" cy="174" rx="122" ry="8" fill="rgba(0,0,0,.35)"/>
     <path d="M30 168 L46 120 L46 32 L210 32 L210 120 L226 168" fill="none" stroke="rgba(244,241,228,.18)" stroke-width="2"/>
     <rect x="30" y="30" width="196" height="138" fill="url(#mesh-${id.replace(/[^a-z0-9]/gi,'')})"/>
-    ${GZ.map(([k,x,y,w,h])=>{const a=z.net[k],c=cell(val(a),nmx),hot=hotN.includes(String(k)),lab=NET.find(q=>q[1]===k)[0];return `<g><rect x="${x}" y="${y}" width="${w}" height="${h}" rx="8" fill="${c.bg}" stroke="${hot?'#ec443d':'rgba(244,241,228,.25)'}" stroke-width="${hot?2.5:1}"/><text x="${x+w/2}" y="${y+h/2+(k===5?2:0)}" text-anchor="middle" font-family="Arial" font-weight="700" font-size="${k===5?14:17}" fill="${c.ink}">${show(a)}</text><text x="${x+w/2}" y="${y+h/2+(k===5?15:16)}" text-anchor="middle" font-family="Arial" font-size="8.5" fill="${c.ink}" opacity=".85">${lab}</text>${hot?`<rect x="${x+w-30}" y="${y+4}" width="26" height="12" rx="6" fill="#141a28"/><text x="${x+w-17}" y="${y+13}" text-anchor="middle" font-family="Arial" font-weight="700" font-size="7.5" fill="#ff8f88" letter-spacing=".5">HOT</text>`:''}</g>`}).join('')}
+    ${GZ.map(([k,x,y,w,h])=>{const a=z.net[k],v=netValue(a),c=cell(v,nmx),hot=hotN.includes(String(k)),lab=NET.find(q=>q[1]===k)[0];return `<g><rect x="${x}" y="${y}" width="${w}" height="${h}" rx="8" fill="${c.bg}" stroke="${hot?'#ec443d':'rgba(244,241,228,.25)'}" stroke-width="${hot?2.5:1}"/><text x="${x+w/2}" y="${y+h/2+(k===5?2:0)}" text-anchor="middle" font-family="Arial" font-weight="700" font-size="${k===5?14:17}" fill="${c.ink}">${show(v)}</text><text x="${x+w/2}" y="${y+h/2+(k===5?15:16)}" text-anchor="middle" font-family="Arial" font-size="8.5" fill="${c.ink}" opacity=".85">${lab}</text>${hot?`<rect x="${x+w-30}" y="${y+4}" width="26" height="12" rx="6" fill="#141a28"/><text x="${x+w-17}" y="${y+13}" text-anchor="middle" font-family="Arial" font-weight="700" font-size="7.5" fill="#ff8f88" letter-spacing=".5">HOT</text>`:''}</g>`}).join('')}
     <path d="M26 170 V28 Q26 24 30 24 H226 Q230 24 230 28 V170" fill="none" stroke="#ec443d" stroke-width="8" stroke-linejoin="round"/>
     <path d="M26 170 V28 Q26 24 30 24 H226 Q230 24 230 28 V170" fill="none" stroke="rgba(255,255,255,.35)" stroke-width="1.5" transform="translate(-1.5,-1.5)"/>
     <line x1="4" y1="172" x2="252" y2="172" stroke="#ec443d" stroke-width="3"/>
   </svg>`;
   return `<div class="zones"><div><div class="small muted" style="margin-bottom:6px">Offensive zone · ${noun}</div><div class="rink">${rink}</div></div>
   <div><div class="small muted" style="margin-bottom:6px">On net · ${noun}</div>${goal}
-  <div class="legend"><span>Cold</span><span class="heatbar" aria-hidden="true"></span><span>Hot</span>${m==='pct'?'<span>· zones with under 5 shots stay cold</span>':''}</div></div></div>`}
+  <div class="legend"><span>Cold</span><span class="heatbar" aria-hidden="true"></span><span>Hot</span>${view==='pct'?'<span>· goals ÷ shots</span>':''}</div></div></div>`}
 let selP=null,perGameP=false,playerSection='summary';
 let playerScope='astroneers';
 function recordedPlayerRows(p){const goalie=p.fullTimeGoalie||p.primary==='goalie';return (M?.matches||[]).filter(m=>Number(m.gameType)===206).flatMap(m=>mplayers(m).filter(x=>x.name===p.name&&((x.position==='goalie')===goalie)).map(x=>({m,x}))).filter(r=>goalie?n(r.x.glshots)>0:['skgoals','skassists','skshots','sktakeaways','skgiveaways'].some(k=>n(r.x[k])>0));}
@@ -581,7 +620,8 @@ function vPlayers(){
   h+=`<div class="card s4"><div class="chips" role="group" aria-label="Player stats scope"><button class="chip" data-player-scope="astroneers" aria-pressed="${playerScope==='astroneers'}">Club Stats</button><button class="chip" data-player-scope="career" aria-pressed="${playerScope==='career'}">Career Stats</button></div></div>`;
   if(playerScope==='career')return h+careerStats(p);
   h+=recordedPlayerHeader(p);
-  h+=`<nav class="card s4 player-tabs" aria-label="Player sections">${[['summary','Summary'],['trends','Trends'],['stats','Stats'],['games','Games']].map(([k,l])=>`<button class="chip" data-player-section="${k}" aria-pressed="${playerSection===k}">${l}</button>`).join('')}</nav>`;
+  h+=`<nav class="card s4 player-tabs" aria-label="Player sections">${[['summary','Summary'],['trends','Trends'],['stats','Stats'],['games','Games'],['shots','Shot Locations']].map(([k,l])=>`<button class="chip" data-player-section="${k}" aria-pressed="${playerSection===k}">${l}</button>`).join('')}</nav>`;
+  if(playerSection==='shots')return h+shotAnalysis(p);
   if(playerSection==='trends')return h+leagueComparison(p)+playerAnalytics(p);
   if(playerSection==='stats')return h+detailedPlayerStats(p);
   if(playerSection==='games')return h+detailedPlayerStats(p,true);
@@ -1089,6 +1129,7 @@ document.addEventListener('click',e=>{
   const pgt=e.target.closest('[data-pgt]'); if(pgt){perGameT=pgt.dataset.pgt==='1';render(true);return}
   const tb=e.target.closest('[data-tab]'); if(tb){tab=tb.dataset.tab;render(true);return}
   const th=e.target.closest('th[data-sort]'); if(th){sortK=th.dataset.sort;render(true);return}
+  const zv=e.target.closest('[data-zone-view]'); if(zv){zoneView[zv.dataset.zoneView]=zv.dataset.mode;render(true);return}
   const z=e.target.closest('[data-zone]'); if(z){zoneMode[z.dataset.zone]=z.dataset.mode;render(true);return}
   const ins=e.target.closest('[data-ins]'); if(ins){const id=ins.dataset.ins;openIns.has(id)?openIns.delete(id):openIns.add(id);render(true);return}
   const o=e.target.closest('[data-open]'); if(o){openMatch=openMatch===o.dataset.open?null:o.dataset.open;render(true);return}
