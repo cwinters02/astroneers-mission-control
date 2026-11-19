@@ -1,1 +1,0 @@
-# astroneers-mission-control
