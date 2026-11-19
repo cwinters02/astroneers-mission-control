@@ -428,7 +428,39 @@ function leagueComparison(p){
  const total=k=>rows.length&&rows.every(r=>r.x[k]!=null)?rows.reduce((s,r)=>s+n(r.x[k]),0):null;
  const ref=k=>rows.length&&rows.every(r=>b?.roles?.[role(r)]?.[k]!=null)?rows.reduce((s,r)=>s+b.roles[role(r)][k],0)/rows.length:null;
  let metrics=[];
- if(goalie){const sv=total('glsaves'),sa=total('glshots');metrics=[{label:'Save percentage',actual:sv==null||!sa?null:sv/sa,average:b?.roles?.goalie?.savePct??null,percent:true,lower:false}];}
+ if(goalie){
+   const ref=b?.verified===true?b.roles?.goalie:null;
+   const sample=(keys,calculate)=>{
+     const known=rows.filter(({x})=>keys.every(k=>x[k]!=null&&Number.isFinite(Number(x[k]))));
+     const sums=keys.map(k=>known.reduce((sum,{x})=>sum+n(x[k]),0));
+     return {actual:known.length?calculate(sums,known.length):null,count:known.length};
+   };
+   const ratio=([a,b])=>b>0?a/b:null;
+   const rate=([a],count)=>a/count;
+   const count=([a])=>a;
+   const metric=(label,keys,calculate,{average=null,percent=false,lower=false}={})=>({label,...sample(keys,calculate),average,percent,lower});
+   metrics=[
+     metric('Save percentage',['glsaves','glshots'],ratio,{average:ref?.savePct}),
+     metric('Saves',['glsaves'],count),
+     metric('Saves / Game',['glsaves'],rate,{average:ref?.savesPerGame}),
+     metric('Shots Faced',['glshots'],count),
+     metric('Shots Faced / Game',['glshots'],rate,{average:ref?.shotsFacedPerGame}),
+     metric('Goals Against (GA)',['glga'],count,{lower:true}),
+     metric('Goals Against / Game',['glga'],rate,{average:ref?.goalsAgainstPerGame,lower:true}),
+     metric('Goals Against Average (GAA)',['glga','toiseconds'],([ga,sec],games)=>games===rows.length&&sec>0?3600*ga/sec:null,{average:ref?.gaa,lower:true}),
+     metric('Breakaway Saves',['glbrksaves'],count),
+     metric('Breakaway Shots Faced',['glbrkshots'],count),
+     metric('Breakaway Save %',['glbrksaves','glbrkshots'],ratio,{percent:true}),
+     metric('Penalty Shot Saves',['glpensaves'],count),
+     metric('Penalty Shots Faced',['glpenshots'],count),
+     metric('Penalty Shot Save %',['glpensaves','glpenshots'],ratio,{percent:true}),
+     metric('Desperation Saves',['gldsaves'],count),
+     metric('Poke Checks',['glpokechecks'],count),
+     metric('PK Clears',['glpkclearzone'],count),
+     metric('Ice Time / Game (min)',['toiseconds'],([seconds],games)=>seconds/games/60)
+   ];
+   metrics[0].percent=true;
+ }
  else metrics=[['Goals','skgoals','goals',false],['Assists','skassists','assists',false],['Takeaways','sktakeaways','takeaways',false],['Giveaways','skgiveaways','giveaways',true],['Blocked shots','skbs','blocks',false]].map(([label,k,bk,lower])=>({label,actual:total(k)==null?null:total(k)/rows.length,average:ref(bk),percent:false,lower}));
  const available=metrics.filter(x=>x.actual!=null&&x.average>0),maxRatio=Math.max(1.5,...available.map(x=>x.actual/x.average));
  const difference=q=>{
@@ -439,8 +471,8 @@ function leagueComparison(p){
    if(q.percent)return `${amount} percentage points ${delta>0?'above':'below'} average`;
    return `${amount} ${delta>0?'more':'fewer'} per game`;
  };
- const chart=metrics.map(q=>{const ratio=q.average>0&&q.actual!=null?q.actual/q.average:null;return `<div class="league-row"><div class="h"><b>${q.label}${q.lower?' ↓ lower is better':''}</b><span class="small muted">${difference(q)}</span></div><div class="league-bar"><span>You · ${fmt(q.actual,q.percent)}</span><div class="league-track"><i style="width:${ratio==null?0:100*ratio/maxRatio}%;background:var(--ice)"></i></div></div><div class="league-bar"><span>3v3 avg · ${fmt(q.average,q.percent)}</span><div class="league-track"><i style="width:${q.average>0?100/maxRatio:0}%;background:var(--crimson)"></i></div></div></div>`}).join('');
- return `<section class="card s4" aria-label="Player vs average EASHL 3v3"><div class="h"><h2>📊 ${esc(dn(p.name))} vs average EASHL 3v3</h2><div class="chips" role="group" aria-label="Comparison sample"><button class="chip" data-league-scope="night" aria-pressed="${leagueScope==='night'}">Last Night</button><button class="chip" data-league-scope="history" aria-pressed="${leagueScope==='history'}">Tracked 3v3 history</button></div></div><p class="small">${leagueScope==='night'?esc(sessionLabel(lastSession())):'All verified stored 3v3 games'} · ${rows.length} active ${goalie?'goalie':'skater'} appearances. ${goalie?'Human goalies only; skater games excluded.':'Per appearance; benchmark follows the actual position played.'}</p>${available.length?`<div class="league-chart" role="img" aria-label="Grouped bars comparing ${esc(dn(p.name))} with the average at the same 3v3 position. Exact values follow in a table.">${chart}</div>`:'<p>Not enough verified player or league data for this comparison.</p>'}<details style="margin-top:16px"><summary>Exact values & benchmark details</summary><div class="tscroll"><table><thead><tr><th>Metric</th><th>${esc(dn(p.name))}</th><th>3v3 role average</th><th>Direction</th></tr></thead><tbody>${metrics.map(q=>`<tr><td>${q.label}</td><td>${fmt(q.actual,q.percent)}</td><td>${fmt(q.average,q.percent)}</td><td>${q.lower?'Lower is better':'Higher is better'}</td></tr>`).join('')}</tbody></table></div><p class="small muted">ChelHead tracked-population reference averages, verified ${esc(b?.checkedAt?.slice(0,10)||'date unavailable')}. Rounded model references, not a census of every EASHL player. Missing fields are excluded, never estimated. DNF appearances are not time-scaled without verified ice time. Career totals may include other modes, so this graph uses stored confirmed 3v3 games only. ${goalie?'No verified league shot-volume/GAA baseline is available, so those comparisons are not drawn.':''}</p></details></section>`;
+ const chart=(goalie?available:metrics).map(q=>{const ratio=q.average>0&&q.actual!=null?q.actual/q.average:null;return `<div class="league-row"><div class="h"><b>${q.label}${q.lower?' ↓ lower is better':''}</b><span class="small muted">${difference(q)}</span></div><div class="league-bar"><span>You · ${fmt(q.actual,q.percent)}</span><div class="league-track"><i style="width:${ratio==null?0:100*ratio/maxRatio}%;background:var(--ice)"></i></div></div><div class="league-bar"><span>3v3 avg · ${fmt(q.average,q.percent)}</span><div class="league-track"><i style="width:${q.average>0?100/maxRatio:0}%;background:var(--crimson)"></i></div></div></div>`}).join('');
+ return `<section class="card s4" aria-label="Player vs average EASHL 3v3"><div class="h"><h2>📊 ${esc(dn(p.name))} vs average EASHL 3v3</h2><div class="chips" role="group" aria-label="Comparison sample"><button class="chip" data-league-scope="night" aria-pressed="${leagueScope==='night'}">Last Night</button><button class="chip" data-league-scope="history" aria-pressed="${leagueScope==='history'}">Tracked 3v3 history</button></div></div><p class="small">${leagueScope==='night'?esc(sessionLabel(lastSession())):'All verified stored 3v3 games'} · ${rows.length} active ${goalie?'goalie':'skater'} appearances. ${goalie?'Human goalies only; skater games excluded.':'Per appearance; benchmark follows the actual position played.'}</p>${available.length?`<div class="league-chart" role="img" aria-label="Grouped bars comparing ${esc(dn(p.name))} with the average at the same 3v3 position. Exact values follow in a table.">${chart}</div>`:'<p>Not enough verified player or league data for this comparison.</p>'}<details style="margin-top:16px" ${goalie?'open':''}><summary>${goalie?'All goalie stats & league benchmarks':'Exact values & benchmark details'}</summary><div class="tscroll"><table><thead><tr><th>Metric</th><th>${esc(dn(p.name))}</th><th>3v3 role average</th>${goalie?'<th>Games with data</th>':'<th>Direction</th>'}</tr></thead><tbody>${metrics.map(q=>`<tr><td>${q.label}</td><td>${fmt(q.actual,q.percent)}</td><td>${fmt(q.average,q.percent)}</td><td>${goalie?`${q.count} of ${rows.length}`:q.lower?'Lower is better':'Higher is better'}</td></tr>`).join('')}</tbody></table></div><p class="small muted">ChelHead tracked-population reference averages, verified ${esc(b?.checkedAt?.slice(0,10)||'date unavailable')}. Rounded model references, not a census of every EASHL player. Missing fields are excluded, never estimated. DNF appearances are not time-scaled without verified ice time. Career totals may include other modes, so this graph uses stored confirmed 3v3 games only. ${goalie?'Only save percentage has a verified league benchmark in the current data. The other rows show recorded goalie stats and their coverage. GAA requires ice time for every appearance in the selected sample.':''}</p></details></section>`;
 }
 
 function overviewCoachCard(r){
@@ -994,9 +1026,88 @@ function scoutCard(s,big){if(!s)return '';const p=P.find(x=>x.name===s.name);con
    ${g?`<div class="small" style="color:var(--body);margin-top:4px"><b style="color:var(--ink)">In net:</b> ${g}</div>`:''}
    <div class="scols"><div><h4>Strengths</h4>${s.strengths.length?`<ul>${s.strengths.map(t=>`<li>${esc(t)}</li>`).join('')}</ul>`:'<div class="small muted">Nothing stood out.</div>'}</div><div><h4>Work on</h4>${s.work.length?`<ul class="wk">${s.work.map(t=>`<li>${esc(t)}</li>`).join('')}</ul>`:'<div class="small muted">Nothing glaring.</div>'}</div></div>
    <div class="take"><b>Coach's take:</b> ${esc(s.take)}</div>${s.desk?`<details class="small muted" style="margin-top:12px"><summary>Stats behind the grade</summary><p style="line-height:1.6">${esc([...s.desk.nightGrade.reasons,...s.desk.reasons].join(' '))} Latest session excluded from personal benchmark; league reference date and available inputs shown. Missing fields omitted.</p></details>`:''}</div>`}
+function approvedCoachReport(){
+ return `<section class="card s4"><div class="h"><h2>📋 The Finklestein Report</h2><span class="pill">November 18</span></div><details><summary>Read the full team report</summary><p class="small muted">The coaching-change story is fictional team satire.</p><div class="prose">
+<p>🚨🚀 <strong>BREAKING NEWS: ASTRONEERS ORGANIZATION ROCKED BY MASSIVE SCANDAL</strong> 🚀🚨</p>
+<p><strong>COACH McBROOM FIRED. FINKLESTEIN TAKES CONTROL.</strong></p>
+<p>The Astroneers organization is in absolute chaos following what insiders are calling <em>the most disgraceful off-ice scandal in EASHL history.</em></p>
+<p>Former head coach McBroom has been relieved of his duties effective immediately after an internal investigation uncovered an alleged affair involving a member of the organization's executive leadership's family.</p>
+<p>Sources claim McBroom had been conducting "private film sessions" at a local hotel for several months. Investigators reportedly discovered that absolutely zero hockey film had been watched during these meetings.</p>
+<p>The situation escalated when McBroom accidentally sent an explicit message intended for his mistress into the Astroneers team group chat, followed immediately by:</p>
+<p><em>"Sorry boys, wrong chat. That was a breakout drill."</em></p>
+<p>The organization has declined to comment further.</p>
+<p>McBroom was last seen leaving team headquarters carrying a half-empty bottle of Pink Whitney and a framed photograph of himself.</p>
+<p>In an emergency press conference, ownership announced the hiring of <strong>COACH FINKLESTEIN</strong>, a notoriously ruthless hockey mind known for demanding accountability, discipline, and an acceptable level of sobriety at team functions.</p>
+<p>Finklestein's opening statement:</p>
+<p><em>"I didn't come here to make friends. I came here to win hockey games. And unlike the last guy, I intend to keep my stick on the ice."</em></p>
+<hr>
+<p>🏒 <strong>THE FINKLESTEIN REPORT — NOVEMBER 18</strong></p>
+<p>📊 <strong>TEAM PERFORMANCE</strong></p>
+<p>🏆 Record: <strong>3–1</strong></p>
+<p>🚨 Goals For: <strong>19</strong></p>
+<p>🥅 Goals Against: <strong>12</strong></p>
+<p>📈 Goal Differential: <strong>+7</strong></p>
+<p>A winning night for the Astroneers, but the new coaching staff believes this team has significantly more to offer.</p>
+<p><em>"Three wins are nice. But I don't hang banners for participation."</em></p>
+<hr>
+<p>📋 <strong>PLAYER REPORT CARDS</strong></p>
+<p>🫎 <strong>MOOSE — A (92)</strong></p>
+<p>⭐ Excellent offensive contribution and one of the night's strongest performers.</p>
+<p>✅ Created scoring opportunities and made an impact throughout the lineup.</p>
+<p>⚠️ Needs to continue improving defensive responsibility and avoid forcing plays.</p>
+<p>🎙️ Finklestein: <em>"This kid can play hockey. Now imagine what happens when he realizes there's a defensive zone."</em></p>
+<p>🐦 <strong>FLAPPY — C (74)</strong></p>
+<p>⚠️ An inconsistent performance that left the coaching staff demanding more.</p>
+<p>✅ Showed flashes of offensive potential.</p>
+<p>❌ Needs better puck management, smarter decisions, and more consistent support.</p>
+<p>🎙️ Finklestein: <em>"I'm not questioning his talent. I'm questioning whether he's watching the same hockey game as the rest of us."</em></p>
+<p>💪 <strong>GORDY — B (83)</strong></p>
+<p>✅ Solid overall contribution and an important part of the team's success.</p>
+<p>✅ Provided offensive support and helped generate opportunities.</p>
+<p>⚠️ Needs to reduce unnecessary turnovers and improve consistency.</p>
+<p>🎙️ Finklestein: <em>"Reliable enough to keep his job. Not good enough to start asking for a raise."</em></p>
+<p>🥅 <strong>GUMBO — A (97)</strong></p>
+<p>🧱 The backbone of the Astroneers.</p>
+<p>⭐ Outstanding performance between the pipes and a major reason the team finished 3–1.</p>
+<p>✅ Delivered important saves and helped protect leads.</p>
+<p>⚠️ Continue improving rebound control and puck distribution.</p>
+<p>🎙️ Finklestein: <em>"Without this man, half the roster would be looking for employment. Somebody buy him dinner."</em></p>
+<hr>
+<p>🌟 <strong>FINKLESTEIN'S THREE STARS</strong></p>
+<p>🥇 <strong>GUMBO</strong> — The last line of defense.</p>
+<p>🥈 <strong>MOOSE</strong> — Offensive difference-maker.</p>
+<p>🥉 <strong>GORDY</strong> — Strong supporting performance.</p>
+<p>🚨 <strong>PLAYER UNDER REVIEW: FLAPPY</strong></p>
+<p>The coaching staff has confirmed that Flappy's performance will be closely monitored moving forward.</p>
+<p><em>"Nobody is bigger than the crest. Especially somebody putting up a C."</em></p>
+<hr>
+<p>🎯 <strong>THE NEW STANDARD</strong></p>
+<p>Coach Finklestein has outlined three immediate priorities:</p>
+<ol><li>🧠 Smarter puck management — stop handing opponents free opportunities.</li><li>🛡️ Better defensive support — stop making Gumbo play a one-man penalty kill.</li><li>🚀 Consistent offensive execution — capitalize on scoring chances without sacrificing possession.</li></ol>
+<p><em>"We've got the talent to win championships. What we need now is the discipline to stop playing like a beer league team sponsored by a bail bonds company."</em></p>
+<hr>
+<p>🛰️ <strong>ASTRONEERS MISSION CONTROL IS LIVE</strong></p>
+<p>The full dashboard is available, featuring:</p>
+<p>📊 Team and individual statistics</p>
+<p>🏒 Game results and box scores</p>
+<p>🔥 Shooting hot zones and playstyles</p>
+<p>⚔️ Player comparisons and line chemistry</p>
+<p>🏆 Team and individual records</p>
+<p>📋 Player grades and coaching reports</p>
+<p>👇 <strong>ACCESS MISSION CONTROL HERE:</strong></p>
+<p><a href="#overview">https://cwinters02.github.io/astroneers-mission-control/#overview</a></p>
+<hr>
+<p>🚀 <strong>A NEW ERA BEGINS.</strong></p>
+<p>McBroom is out. Finklestein is in.</p>
+<p>The standards have changed.</p>
+<p>The expectations have risen.</p>
+<p>And somewhere in Rochester, Coach McBroom is desperately trying to convince his wife that "five-hole practice" was strictly hockey terminology.</p>
+<p><strong>#FinklesteinEra 🚀🏒</strong></p>
+</div></details></section>`;
+}
 function vCoach(){const sess=lastSession();const ins=coachInsights();
   let h=`<div class="card s4 accent"><div style="position:relative;z-index:1">${coachHead('Head coach · Astroneers')}<p style="margin:12px 0 0;max-width:70ch;color:rgba(255,255,255,.88);line-height:1.55">My read on the numbers, updated every time the stats refresh. Scouting reports cover the last session${sess.length?' ('+esc(sessionLabel(sess))+')':''}. Skaters are evaluated on their skater performance. Gumbo Slice Jr is our starting goalie and is evaluated only in net.</p></div></div>`;
-  h+=savedReportCard();h+=ratingTable();h+=`<div class="card s4"><div class="h"><h2>Coach's insights</h2><span class="pill">${ins.length} notes</span></div>${ins.map((i,k)=>coachRow(i,'k'+k)).join('')}<div class="small muted" style="margin-top:10px">Tap a note for the full read.</div></div>`;
+  h+=approvedCoachReport();h+=savedReportCard();h+=ratingTable();h+=`<div class="card s4"><div class="h"><h2>Coach's insights</h2><span class="pill">${ins.length} notes</span></div>${ins.map((i,k)=>coachRow(i,'k'+k)).join('')}<div class="small muted" style="margin-top:10px">Tap a note for the full read.</div></div>`;
   if(sess.length){h+=`<div class="card s4" style="padding-bottom:10px"><div class="h" style="margin-bottom:0"><h2>Scouting reports · last session</h2><span class="pill">${esc(sessionLabel(sess))}</span></div></div>`;
     const reps=P.map(p=>scout(p.name)).filter(Boolean).sort((a,b)=>(b.main??0)-(a.main??0));h+=reps.map(r=>scoutCard(r)).join('');
     const missing=P.filter(p=>!reps.find(r=>r.name===p.name));if(missing.length)h+=`<div class="card s4"><div class="empty">${missing.map(p=>esc(dn(p.name))).join(', ')} didn't play last session.</div></div>`;}
@@ -1180,7 +1291,7 @@ function scout(name){
  return old;
 }
 function coachInsights(){
- const sess=lastSession();if(!sess.length)return [];const f=form(sess),out=[{tone:f.w>f.l+f.o?'good':'note',score:5,title:`Full night: ${f.w}–${f.l+f.o}`,metric:'Goals for / against',value:`${f.gf}–${f.ga}`,body:coachPick('team',0,[`We finished ${f.w}–${f.l+f.o}, with ${f.gf} goals for and ${f.ga} against. The result matters. So does how we manage the next possession. Review the costly decisions and keep the plays that worked.`,`There is a ${f.w}–${f.l+f.o} night to build on. We scored ${f.gf} and allowed ${f.ga}. I want the same commitment to creating chances and a better response when the puck changes hands.`,`My assessment: ${f.w}–${f.l+f.o}, ${f.gf}–${f.ga} in goals. Give the players credit for the production. Then look at the decisions we can improve before the next session.`,`The scorecard says ${f.w}–${f.l+f.o}. The goal count was ${f.gf}–${f.ga}; shots were ${f.sf}–${f.sa}. We'll take what we earned and get specific about the next correction.`])}];
+ const sess=lastSession();if(!sess.length)return [];const f=form(sess),out=[{tone:f.w>f.l+f.o?'good':'note',score:5,title:`Full night: ${f.w}–${f.l+f.o}`,metric:'Goals for / against',value:`${f.gf}–${f.ga}`,body:coachPick('team',0,[`We went ${f.w}–${f.l+f.o} and put up ${f.gf}. We also gave up ${f.ga}. Nobody gets a banner for the first number while Gumbo has to explain the second.`,`The scorecard says ${f.w}–${f.l+f.o}, ${f.gf} for and ${f.ga} against. Give the puck carrier an outlet before we start a charitable foundation for opposing forwards.`,`${f.gf} goals for, ${f.ga} against, and a ${f.w}–${f.l+f.o} night. Next practice we try the radical idea of giving our goalie some help through the middle.`,`We finished ${f.w}–${f.l+f.o}. The ${f.gf} goals were welcome. The ${f.ga} against are staying on the whiteboard until we learn how to recover after a turnover.`])}];
  for(const p of P){const r=scout(p.name);if(r)out.push({tone:(r.desk?.delta||0)>0?'good':(r.desk?.delta||0)<0?'bad':'note',score:3,title:dn(p.name)+' · next-game focus',metric:'Grade / adjusted OVR',value:`${letterGrade(r.main)} / ${r.desk?.overall??'N/A'}`,body:r.take+' Next session: '+r.assignment})}return out;
 }
 let persistedReports=[];
