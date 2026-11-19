@@ -247,6 +247,16 @@ button:focus-visible,a:focus-visible,summary:focus-visible{outline:3px solid #b6
 .league-chart{display:grid;gap:22px;margin-top:22px}.league-row .h{margin-bottom:8px}.league-bar{display:grid;grid-template-columns:145px minmax(0,1fr);align-items:center;gap:12px;margin-top:7px;font-size:12px}.league-track{height:15px;background:rgba(255,255,255,.065);border-radius:5px;overflow:hidden}.league-track i{height:100%;display:block;border-radius:5px;transition:width .25s ease}@media(max-width:560px){.league-bar{grid-template-columns:118px minmax(0,1fr);gap:8px}.league-row .h{align-items:flex-start;gap:5px;flex-direction:column}}@media(prefers-reduced-motion:reduce){.league-track i{transition:none}}
 
 .mobile-log{display:none}.game-line{border-top:1px solid var(--line);padding:14px 0}
+.mobile-rating-list{display:none}
+ @media(max-width:720px){
+   .coach-ratings .tscroll{display:none}
+   .mobile-rating-list{display:grid;gap:10px;list-style:none;margin:0;padding:0}
+   .mobile-rating{min-width:0;border:1px solid var(--line);border-radius:14px;padding:12px;background:var(--chip)}
+   .mobile-rating h3{margin:0;overflow-wrap:anywhere}
+   .mobile-rating dl{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin:10px 0 0}
+   .mobile-rating dt{font-size:11px;color:var(--muted)}
+   .mobile-rating dd{margin:4px 0 0;font-size:15px;font-weight:700;overflow-wrap:anywhere}
+ }
 /* Compact player navigation and touch-friendly mobile controls. */
 .player-tabs{display:flex;gap:8px;position:sticky;top:8px;z-index:8;padding:10px;background:var(--card)}
 .player-tabs .chip{flex:1;min-height:44px;justify-content:center}
@@ -1315,7 +1325,19 @@ function playerAnalytics(p){
  h+=goalie?chart('Save percentage by game',active,x=>x.glsaves==null||!x.glshots?null:x.glsaves/x.glshots,'var(--ice)',true)+chart('Shots faced by game',active,x=>x.glshots??null,'var(--light)'):chart('Points by game',active,x=>x.skgoals==null||x.skassists==null?null:n(x.skgoals)+n(x.skassists),'var(--ice)')+chart('Giveaways by game',active,x=>x.skgiveaways??null,'var(--crimson)');
  return h;
 }
-function ratingTable(){const skaters=[...P].filter(p=>p.primary!=='goalie').sort((a,b)=>(b.cSk??-1)-(a.cSk??-1)),goalies=P.filter(p=>p.primary==='goalie');const rows=[...skaters,...goalies].map(p=>{const goalie=p.primary==='goalie',d=goalie?p.glDesk:p.skDesk;return `<tr><td>${esc(dn(p.name))}</td><td>${goalie?'Starting goalie':'Skater'}</td><td>${d.overall??'Unavailable'}</td><td>${letterGrade(d.form)}</td><td>${recordedRosterStats(p,goalie).gp}</td></tr>`}).join('');return `<div class="card s4"><div class="h"><h2>Player Ratings</h2><span class="pill">Overall and Night Grade are separate</span></div><div class="tscroll"><table><thead><tr><th>Player</th><th>Role</th><th>Overall</th><th>Night Grade · ${esc(matchNight(lastSession()[0]||{})||'Unavailable')}</th><th>Games</th></tr></thead><tbody>${rows}</tbody></table></div><p class="small muted">Overall is a custom 0–99 rating covering saved confirmed Astroneers3v3 history and capped recent form. Night Grade is only a letter for the dated full session. Gumbo is evaluated only as starting goalie. Career/global ratings do not enter either calculation. These are experimental estimates, not official EA ratings.</p></div>`}
+function ratingTable(){
+ const skaters=P.filter(p=>p.primary!=='goalie').sort((a,b)=>(b.cSk??-1)-(a.cSk??-1));
+ const goalies=P.filter(p=>p.primary==='goalie');
+ const ratings=[...skaters,...goalies].map(p=>{
+   const goalie=p.primary==='goalie',desk=goalie?p.glDesk:p.skDesk;
+   return {name:esc(dn(p.name)),role:goalie?'Starting goalie':'Skater',overall:desk.overall??'Unavailable',grade:letterGrade(desk.form),games:recordedRosterStats(p,goalie).gp};
+ });
+ const night=esc(matchNight(lastSession()[0]||{})||'Unavailable');
+ const rows=ratings.map(({name,role,overall,grade,games})=>`<tr><th scope="row">${name}</th><td>${role}</td><td>${overall}</td><td>${grade}</td><td>${games}</td></tr>`).join('');
+ const cards=ratings.map(({name,role,overall,grade,games})=>`<li class="mobile-rating"><h3>${name}</h3><span class="small muted">${role}</span><dl><div><dt>Overall</dt><dd>${overall}</dd></div><div><dt>Night Grade</dt><dd>${grade}</dd></div><div><dt>Games</dt><dd>${games}</dd></div></dl></li>`).join('');
+ return `<section class="card s4 coach-ratings"><div class="h"><h2>Player Ratings</h2><span class="pill">Night Grade · ${night}</span></div><div class="tscroll"><table><thead><tr><th scope="col">Player</th><th scope="col">Role</th><th scope="col">Overall</th><th scope="col">Night Grade</th><th scope="col">Games</th></tr></thead><tbody>${rows}</tbody></table></div><ul class="mobile-rating-list" role="list">${cards}</ul><p class="small muted">Overall is a custom 0–99 rating covering saved confirmed Astroneers3v3 history and capped recent form. Night Grade is only a letter for the dated full session. Gumbo is evaluated only as starting goalie. Career/global ratings do not enter either calculation. These are experimental estimates, not official EA ratings.</p></section>`;
+}
+
 
 const letterGrade=r=>r==null?'N/A':r>=90?'A':r>=80?'B':r>=70?'C':r>=60?'D':'F';
 function verifiedMatchCard(m,i){const r=result(m),open=openMatch===m.id,ps=mplayers(m);const show=x=>x==null?'–':esc(x);const cols=[['Pos','position'],['G','skgoals'],['A','skassists'],['+/-','skplusmin'],['SOG','skshots'],['Att','skshotattempts'],['Sh%','skshotpct'],['Hits','skhits'],['BS','skbs'],['TK','sktakeaways'],['GV','skgiveaways'],['INT','skinterceptions'],['Pass','passline'],['Pass%','skpasspct'],['Saucer','sksaucerpasses'],['Poss','skpossession'],['FOW','skfow'],['FOL','skfol'],['PIM','skpim'],['Drawn','skpenaltiesdrawn'],['PPG','skppg'],['SHG','skshg'],['GWG','skgwg'],['Defl','skdeflections'],['PK clr','skpkclearzone'],['SV','glsaves'],['SA','glshots'],['SV%','savepct'],['GA','glga'],['Brk SV','glbrksaves'],['Pen SV','glpensaves'],['D-saves','gldsaves'],['Poke','glpokechecks'],['Off','ratingOffense'],['Def','ratingDefense'],['Team','ratingTeamplay'],['Level','playerLevel'],['TOI','toiseconds'],['DNF','player_dnf']];
