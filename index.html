@@ -139,7 +139,7 @@ a{color:inherit}
 .mrow:hover{background:var(--chip)}
 /* hot zones */
 .zones{display:grid;grid-template-columns:minmax(0,3fr) minmax(0,2fr);gap:16px;align-items:start}
-.rink{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));grid-template-areas:"lc lc btn rc rc" "ol lns cr rns or" "ol lci ls rci or" "lp lp hs rp rp" ". cp cp cp ." "nz nz nz nz nz";gap:4px;border:2px solid var(--line);border-top-left-radius:60px;border-top-right-radius:60px;padding:8px}
+.rink-map{display:block;width:100%;height:auto;max-width:550px;margin:0 auto}
 .goal{width:100%;height:auto;display:block;max-width:420px;margin:0 auto}
 .heatbar{display:inline-block;width:110px;height:10px;border-radius:5px;background:linear-gradient(90deg,#2c4f7a,#63a6dd,#eae6ca,#ec443d)}
 .z{position:relative}
@@ -448,6 +448,7 @@ function vOverview(){
   <div class="card kpi lift" style="animation-delay:.1s"><div class="ic">${I('flame')}</div><div><div class="lbl">Top scorer</div><div class="val num">${recordedLeader?recordedLeader.s.points:'Unavailable'} pts</div><div class="sub">${recordedLeader?esc(dn(recordedLeader.p.name)):'No verified sample'} · recorded Astroneers 3v3</div></div></div>
   <div class="card kpi accent" style="animation-delay:.14s"><div style="position:relative;z-index:1;min-width:0"><div class="lbl">Last game ${last?`<span class="live-chip">${(last.uiVerified?'Observed '+last.observedDate:ago(last.ts))}</span>`:''}</div>
     <div class="val num">${last?`${lr.code} ${last.us.score}-${last.opp.score}`:'No games yet'}</div><div class="sub" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${last?'vs '+esc(last.opp.name||'Unknown club'):''}</div></div></div>`;
+  h+=`<div class="card s4" style="animation-delay:.24s"><div class="h"><h2>Roster</h2><span class="pill">Tap a player for every stat</span></div><div class="tiles">${byPts.map(rosterTile).join('')}</div></div>`;
   const chi=CH().insights||[], cht=CH().matchTrends||[];
   const ci=coachInsights().slice(0,5);
   h+=`<div class="card s4" style="animation-delay:.16s"><div class="h">${coachHead('Coach’s feedback · latest session')}<a class="pill i" href="#coach">Full report & ratings</a></div><p style="line-height:1.6">${esc(ci[0]?.body||'Waiting for a verified session.')}</p><div class="small muted">Coaching priorities inferred from box scores; no video reviewed. Night grades blend verified position-specific 3v3 league context with personal form.</div></div>`;
@@ -457,7 +458,6 @@ function vOverview(){
     ${ms.length?ms.slice(0,5).map(matchRow).join(''):'<div class="empty">No games tracked yet. They appear after the next refresh.</div>'}</div>`;
   h+=shotAnalysis()+trackedRecords()+lineChemistry();
   if(cht.length) h+=`<div class="card s2" style="animation-delay:.22s"><div class="h"><h2>Match trends</h2><span class="pill">${cht.length} signals · ChelHead</span></div>${cht.map((i,k)=>insightRow(i,'t'+k)).join('')}<div class="small muted" style="margin-top:10px">As of ${chAt('matchTrends')}.</div></div>`;
-  h+=`<div class="card s4" style="animation-delay:.24s"><div class="h"><h2>Roster</h2><span class="pill">Tap a player for every stat</span></div><div class="tiles">${byPts.map(rosterTile).join('')}</div></div>`;
   if(false) h+=`<div class="card s2" style="animation-delay:.28s"><div class="h"><h2>Coach's signals</h2><span class="pill">From career and recent games</span></div>${signals().map(s=>`<div class="row"><span class="bar" style="background:${s.c}"></span><div class="grow"><b>${s.t}</b><div class="small muted">${s.d}</div></div><span class="v" style="color:${s.c}">${s.v}</span></div>`).join('')}</div>`;
   h+=`<div class="card s4" style="animation-delay:.3s"><div class="h"><h2>Club profile</h2><span class="pill">Division ${esc(D.clubStats.currentDivision)}</span></div>${clubProfile()}</div>`;
   h+=verificationSummary();
@@ -514,8 +514,14 @@ function lineChemistry(){
      groups.get(key).games.push(m);
    }
  }
- const rows=[...groups.values()].sort((a,b)=>b.games.length-a.games.length);
- return `<section class="card s4"><h2>Line Chemistry</h2><p class="small muted">Team results when both players recorded an active skater appearance in the same game. Goal differential is for the full game.</p>${rows.length?`<div class="tscroll"><table><thead><tr><th>Skater pair</th><th>GP</th><th>W–L–OTL</th><th>Goals for / against</th><th>Goal diff. / game</th></tr></thead><tbody>${rows.map(({players,games})=>{const {w,l,o,gf,ga,n}=form(games);return `<tr><td>${players.map(name=>esc(dn(name))).join(' + ')}</td><td>${n}</td><td>${w}–${l}–${o}</td><td>${gf} / ${ga}</td><td>${gf>ga?'+':''}${((gf-ga)/n).toFixed(2)}</td></tr>`;}).join('')}</tbody></table></div>`:'<p>No verified skater pairs yet.</p>'}</section>`;
+ const rows=[...groups.values()].map(({players,games})=>{
+   const stats=form(games),{w,gf,ga,n}=stats;
+   const goalShare=gf+ga?gf/(gf+ga):.5;
+   const performance=.6*(w/n)+.4*goalShare;
+   const rating=Math.round(100*(n*performance+2)/(n+4));
+   return {players,stats,rating};
+ }).sort((a,b)=>b.rating-a.rating||b.stats.n-a.stats.n);
+ return `<section class="card s4"><h2>Line Chemistry</h2><p class="small muted">Team results when both players recorded an active skater appearance in the same game. Rating weights win rate (60%) and goal share (40%), with small samples pulled toward 50.</p>${rows.length?`<div class="tscroll"><table><thead><tr><th>Skater pair</th><th>Rating / 100</th><th>GP</th><th>W–L–OTL</th><th>Goals for / against</th><th>Goal diff. / game</th></tr></thead><tbody>${rows.map(({players,stats,rating})=>{const {w,l,o,gf,ga,n}=stats;return `<tr><td>${players.map(name=>esc(dn(name))).join(' + ')}</td><td><span class="pill i"><b>${rating}</b></span></td><td>${n}</td><td>${w}–${l}–${o}</td><td>${gf} / ${ga}</td><td>${gf>ga?'+':''}${((gf-ga)/n).toFixed(2)}</td></tr>`;}).join('')}</tbody></table></div>`:'<p>No verified skater pairs yet.</p>'}</section>`;
 }
 function clubProfile(){const c=D.clubStats,f=form(M?.matches||[]),latest=form(lastSession());
  const items=[['Club','Astroneers · 69789'],['Mode','EASHL 3v3'],['Playoffs tracked',(M?.matches||[]).filter(m=>competition(m)==='playoffs').length],['Regular-season games',(M?.matches||[]).filter(m=>competition(m)==='regular').length],['Verified division-title games',(M?.matches||[]).filter(m=>competition(m)==='title').length],['Tracked record',`${f.w}–${f.l}–${f.o}`],['Verified games tracked',f.n],['Goals for / against',`${f.gf} / ${f.ga}`],['Goals / game',f.n?f.gfpg.toFixed(2):'Unavailable'],['Goals against / game',f.n?f.gapg.toFixed(2):'Unavailable'],['Shots for / against',`${f.sf} / ${f.sa}`],['Shot share',f.sf+f.sa?pct1(f.sf/(f.sf+f.sa)):'Unavailable'],['Latest full night',`${latest.w}–${latest.l+latest.o} · ${latest.n} games`],['Roster','Moose · Flappy · Gordy · Gumbo'],['Starting goalie','Gumbo Slice Jr']];
@@ -551,15 +557,35 @@ function shotAnalysis(p){
 function zonesHtml(z,id,goalie,gp){
  const m=zoneMode[id]||'shots',view=zoneView[id]||'total',idx=m==='goals'?1:0;
  const total=map=>Object.values(map).reduce((sum,a)=>sum+a[idx],0);
- const value=den=>a=>view==='pct'?(a[0]>0?100*a[1]/a[0]:null):view==='share'?(den>0?100*a[idx]/den:null):view==='rate'?a[idx]/gp:a[idx];
+ const value=den=>a=>view==='pct'?(a[0]>0&&a[1]>=0&&a[1]<=a[0]?100*a[1]/a[0]:null):view==='share'?(den>0?100*a[idx]/den:null):view==='rate'?a[idx]/gp:a[idx];
  const iceValue=value(total(z.ice)),netValue=value(total(z.net));
  const show=v=>v==null?'–':view==='total'?v:view==='rate'?v.toFixed(2):v.toFixed(1)+'%';
   const iv=Object.values(z.ice).map(iceValue),nv=Object.values(z.net).map(netValue);const imx=Math.max(...iv,1),nmx=Math.max(...nv,1);
-  const hotI=Object.keys(z.ice).filter(k=>iceValue(z.ice[k])>0&&iceValue(z.ice[k])>=.7*imx), hotN=Object.keys(z.net).filter(k=>netValue(z.net[k])>0&&netValue(z.net[k])>=.7*nmx);
+  const hotN=Object.keys(z.net).filter(k=>netValue(z.net[k])>0&&netValue(z.net[k])>=.7*nmx);
   const noun=view==='pct'?(goalie?'opponent shooting %':'shooting %'):(m==='goals'?'goals':'shots')+(goalie?' against':'');
   const cell=(v,mx)=>{const t=mx?v/mx:0;const rgb=heatRGB(t);return {bg:`rgba(${rgb.join(',')},${(.25+.7*t).toFixed(2)})`,ink:t>.35?heatInk(rgb):'#f4f1e4'}};
-  const tag='<em class="hot">HOT</em>';
-  const rink=ICE.map(q=>{const a=z.ice[q[2]],v=iceValue(a),c=cell(v,imx),hot=hotI.includes(String(q[2]));return `<div class="z${hot?' is-hot':''}" style="grid-area:${q[3]};background:${c.bg};color:${c.ink}">${hot?tag:''}<b>${show(v)}</b><span style="color:inherit;opacity:.85">${q[1]}</span></div>`}).join('');
+  const rinkOutline='M8 370V86Q8 8 91 8H349Q432 8 432 86V370Z';
+  const rinkId='rink-'+id.replace(/[^a-z0-9]/gi,'');
+  // Each shape corresponds to an existing EA zone ID.
+  const shapes=[
+   [3,62,38,'M8 8H151V65H8Z'],[2,220,36,'M151 8H289V65H151Z'],[1,378,38,'M289 8H432V65H289Z'],
+   [9,35,152,'M8 65H86L108 127L78 236H8Z'],[6,124,95,'M86 65H195L164 126L108 127Z'],[4,220,90,'M195 65H245L276 126H164Z'],
+   [8,316,95,'M245 65H354L332 127L276 126Z'],[5,405,152,'M354 65H432V236H362L332 127Z'],
+   [11,126,181,'M108 127L164 126L192 236H78Z'],[7,220,158,'M164 126H276L248 236H192Z'],[12,314,181,'M276 126L332 127L362 236H248Z'],
+   [15,83,279,'M8 236H192L149 274L132 332H8Z'],[10,220,246,'M192 236H248L291 274H149Z'],[13,357,279,'M248 236H432V332H308L291 274Z'],
+   [14,220,300,'M149 274H291L308 332H132Z'],[16,220,346,'M8 332H432V370H8Z']
+  ];
+  const rink=`<svg class="rink-map" viewBox="0 0 440 378" role="img" aria-label="Ice rink showing ${noun} by rink zone">
+   <defs><clipPath id="${rinkId}"><path d="${rinkOutline}"/></clipPath></defs>
+   <path d="${rinkOutline}" fill="#202d45"/>
+   <g clip-path="url(#${rinkId})">
+   ${shapes.map(([k,x,y,d])=>{const a=z.ice[k],v=iceValue(a),c=cell(v,imx),label=ICE.find(q=>q[2]===k)[1];return `<path d="${d}" fill="${c.bg}" stroke="rgba(232,241,253,.36)" stroke-width="1.3"><title>${label}: ${show(v)} (${a[0]} shots, ${a[1]} goals)</title></path>`;}).join('')}
+   <g fill="none" stroke="#f4b5b6" stroke-width="2" opacity=".66"><path d="M8 65H432 M193 65V60Q193 46 209 46H231Q247 46 247 60V65"/><path d="M192 65A28 28 0 0 0 248 65" fill="#63a6dd" fill-opacity=".35"/><circle cx="117" cy="164" r="48"/><circle cx="323" cy="164" r="48"/></g>
+   <g fill="#f4b5b6" opacity=".75"><circle cx="117" cy="164" r="3"/><circle cx="323" cy="164" r="3"/><circle cx="117" cy="345" r="3"/><circle cx="323" cy="345" r="3"/></g>
+   <path d="M8 332H432" stroke="#70b9fa" stroke-width="6" opacity=".85"/>
+   ${shapes.map(([k,x,y])=>{const v=iceValue(z.ice[k]),label=ICE.find(q=>q[2]===k)[1];return `<g text-anchor="middle" fill="#f7fbff" stroke="#152238" stroke-width="2.5" paint-order="stroke" pointer-events="none"><text x="${x}" y="${y}" font-size="17" font-weight="750">${show(v)}</text><text x="${x}" y="${y+13}" font-size="10">${label}</text></g>`;}).join('')}
+   </g><path d="${rinkOutline}" fill="none" stroke="#a8bfd3" stroke-width="4"/>
+  </svg>`;
   // goal mouth zones: [net zone #, x, y, w, h]
   const GZ=[[1,38,40,88,56],[2,134,40,88,56],[3,38,104,64,58],[5,108,114,40,48],[4,154,104,64,58]];
   const goal=`<svg class="goal" viewBox="0 0 256 186" role="img" aria-label="Hockey goal showing ${noun} by net zone">
@@ -572,9 +598,9 @@ function zonesHtml(z,id,goalie,gp){
     <path d="M26 170 V28 Q26 24 30 24 H226 Q230 24 230 28 V170" fill="none" stroke="rgba(255,255,255,.35)" stroke-width="1.5" transform="translate(-1.5,-1.5)"/>
     <line x1="4" y1="172" x2="252" y2="172" stroke="#ec443d" stroke-width="3"/>
   </svg>`;
-  return `<div class="zones"><div><div class="small muted" style="margin-bottom:6px">Offensive zone · ${noun}</div><div class="rink">${rink}</div></div>
+  return `<div class="zones"><div><div class="small muted" style="margin-bottom:6px">Offensive zone · ${noun}</div>${rink}</div>
   <div><div class="small muted" style="margin-bottom:6px">On net · ${noun}</div>${goal}
-  <div class="legend"><span>Cold</span><span class="heatbar" aria-hidden="true"></span><span>Hot</span>${view==='pct'?'<span>· goals ÷ shots</span>':''}</div></div></div>`}
+  <div class="legend"><span>Cold</span><span class="heatbar" aria-hidden="true"></span><span>Hot</span>${view==='pct'?'<span>· goals ÷ shots · dashes indicate zero shots or mismatched source counts</span>':''}</div></div></div>`}
 let selP=null,perGameP=false,playerSection='summary';
 let playerScope='astroneers';
 function recordedPlayerRows(p){const goalie=p.fullTimeGoalie||p.primary==='goalie';return (M?.matches||[]).filter(m=>Number(m.gameType)===206).flatMap(m=>mplayers(m).filter(x=>x.name===p.name&&((x.position==='goalie')===goalie)).map(x=>({m,x}))).filter(r=>goalie?n(r.x.glshots)>0:['skgoals','skassists','skshots','sktakeaways','skgiveaways'].some(k=>n(r.x[k])>0));}
