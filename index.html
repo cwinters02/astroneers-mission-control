@@ -564,15 +564,20 @@ function trackedRecords(){
  return `<section class="card s4"><div class="h"><h2><span aria-hidden="true">🏆</span> Astroneers Records</h2><span class="pill">Tracked 3v3</span></div><div class="stats">${splits.map(([label,games])=>{const {w,l,o}=form(games);return tile(label,games.length?`${w}–${l}–${o}`:'Unavailable');}).join('')}</div>${records}${teamHonors(games)}</section>`;
 }
 function lineChemistry(){
- const names=new Set(P.map(p=>p.name)),groups=new Map();
- for(const m of tracked3v3()){
-   const skaters=[...new Set(mplayers(m).filter(x=>names.has(x.name)&&x.position!=='goalie'&&['skgoals','skassists','skshots','sktakeaways','skgiveaways'].some(k=>n(x[k])>0)).map(x=>x.name))].sort();
-   const pairs=skaters.flatMap((a,i)=>skaters.slice(i+1).map(b=>[a,b]));
-   for(const players of pairs){
-     const key=players.join('|');
-     if(!groups.has(key))groups.set(key,{players,games:[]});
-     groups.get(key).games.push(m);
+ const names=new Set(P.map(p=>p.name)),groups=new Map(),games=tracked3v3();
+ const roles=['center','leftWing','rightWing','defenseMen','goalie'];
+ let incomplete=0;
+ for(const m of games){
+   const lineup=mplayers(m).filter(x=>roles.includes(x.position)&&names.has(x.name));
+   const goalies=lineup.filter(x=>x.position==='goalie'&&n(x.glshots)>0);
+   const skaters=lineup.filter(x=>x.position!=='goalie'&&['skgoals','skassists','skshots','sktakeaways','skgiveaways','toiseconds'].some(k=>n(x[k])>0));
+   if(skaters.length!==3||goalies.length!==1||new Set(lineup.map(x=>x.name)).size!==4||new Set(lineup.map(x=>x.position)).size!==4){
+     incomplete++;continue;
    }
+   const players=[...skaters,...goalies].sort((a,b)=>roles.indexOf(a.position)-roles.indexOf(b.position));
+   const key=JSON.stringify(players.map(({name,position})=>[name,position]));
+   if(!groups.has(key))groups.set(key,{players,games:[]});
+   groups.get(key).games.push(m);
  }
  const rows=[...groups.values()].map(({players,games})=>{
    const stats=form(games),{w,gf,ga,n}=stats;
@@ -581,7 +586,7 @@ function lineChemistry(){
    const rating=Math.round(100*(n*performance+2)/(n+4));
    return {players,stats,rating};
  }).sort((a,b)=>b.rating-a.rating||b.stats.n-a.stats.n);
- return `<section class="card s4"><h2><span aria-hidden="true">⚡</span> Line Chemistry</h2><p class="small muted">Team results when both players recorded an active skater appearance in the same game. Rating weights win rate (60%) and goal share (40%), with small samples pulled toward 50.</p>${rows.length?`<div class="tscroll"><table><thead><tr><th>Skater pair</th><th>Rating / 100</th><th>GP</th><th>W–L–OTL</th><th>Goals for / against</th><th>Goal diff. / game</th></tr></thead><tbody>${rows.map(({players,stats,rating})=>{const {w,l,o,gf,ga,n}=stats;return `<tr><td>${players.map(name=>esc(dn(name))).join(' + ')}</td><td><span class="pill i"><b>${rating}</b></span></td><td>${n}</td><td>${w}–${l}–${o}</td><td>${gf} / ${ga}</td><td>${gf>ga?'+':''}${((gf-ga)/n).toFixed(2)}</td></tr>`;}).join('')}</tbody></table></div>`:'<p>No verified skater pairs yet.</p>'}</section>`;
+ return `<section class="card s4"><h2><span aria-hidden="true">⚡</span> Line Chemistry</h2><p class="small muted">Rating for the full lineup of three skaters and one goalie, grouped by position. Win rate counts for 60% and goal share for 40%, with small samples pulled toward 50. ${incomplete} of ${games.length} tracked games lacked a complete verified roster lineup.</p>${rows.length?`<div class="tscroll"><table><thead><tr><th>Full lineup</th><th>Rating / 100</th><th>GP</th><th>W–L–OTL</th><th>Goals for / against</th><th>Goal diff. / game</th></tr></thead><tbody>${rows.map(({players,stats,rating})=>{const {w,l,o,gf,ga,n}=stats;return `<tr><td>${players.map(({name,position})=>`<div><span class="small muted">${esc(POS[position]||position)}</span> · ${esc(dn(name))}</div>`).join('')}</td><td><span class="pill i"><b>${rating}</b></span></td><td>${n}</td><td>${w}–${l}–${o}</td><td>${gf} / ${ga}</td><td>${gf>ga?'+':''}${((gf-ga)/n).toFixed(2)}</td></tr>`;}).join('')}</tbody></table></div>`:'<p>No complete roster lineup has been verified yet.</p>'}</section>`;
 }
 function clubProfile(){const c=D.clubStats,f=form(M?.matches||[]),latest=form(lastSession());
  const items=[['Club','Astroneers · 69789'],['Mode','EASHL 3v3'],['Playoffs tracked',(M?.matches||[]).filter(m=>competition(m)==='playoffs').length],['Regular-season games',(M?.matches||[]).filter(m=>competition(m)==='regular').length],['Verified division-title games',(M?.matches||[]).filter(m=>competition(m)==='title').length],['Tracked record',`${f.w}–${f.l}–${f.o}`],['Verified games tracked',f.n],['Goals for / against',`${f.gf} / ${f.ga}`],['Goals / game',f.n?f.gfpg.toFixed(2):'Unavailable'],['Goals against / game',f.n?f.gapg.toFixed(2):'Unavailable'],['Shots for / against',`${f.sf} / ${f.sa}`],['Shot share',f.sf+f.sa?pct1(f.sf/(f.sf+f.sa)):'Unavailable'],['Latest full night',`${latest.w}–${latest.l+latest.o} · ${latest.n} games`],['Roster','Moose · Flappy · Gordy · Gumbo'],['Starting goalie','Gumbo Slice Jr']];
