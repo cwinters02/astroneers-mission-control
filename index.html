@@ -142,6 +142,7 @@ a{color:inherit}
 .overview-coach details{border-top:1px solid var(--line);padding-top:10px}
 .overview-coach summary{cursor:pointer;font-weight:700;padding-block:4px}
 .overview-coach details p{line-height:1.6;margin:10px 0 0}
+.record-tie{border-bottom:1px solid var(--line);padding:10px 0}.record-tie summary{cursor:pointer}.record-tie .row{margin-top:5px}
 /* hot zones */
 .zones{display:grid;grid-template-columns:minmax(0,3fr) minmax(0,2fr);gap:16px;align-items:start}
 .rink-map{display:block;width:100%;height:auto;max-width:550px;margin:0 auto}
@@ -458,7 +459,7 @@ function overviewCoachCard(r){
  }
  const assignment=(r.assignment||'').replace(/^Next session:\s*/i,'');
  const bullets=[['What went well',r.highlight||'No verified appearance to assess.'],['Work on',r.focus||assignment],['Key stats',rows.length?stats.join(' · '):'No verified stats for this session.']];
- return `<section class="card s2 overview-coach"><div class="h"><h2>${esc(dn(r.name))}</h2><span class="pill">Night Grade ${letterGrade(r.main)} · Overall ${r.desk.overall??'N/A'}</span></div><ul>${bullets.map(([label,body])=>`<li><b>${label}</b> · ${esc(body)}</li>`).join('')}</ul><details><summary>Full coach report</summary><p>${esc(r.take)}</p><p class="small"><b>Next session</b> · ${esc(assignment)}</p></details></section>`;
+ return `<section class="card s2 overview-coach"><div class="h"><h2>${esc(dn(r.name))}</h2><span class="pill">Night Grade ${letterGrade(r.main)} · Overall ${r.desk.overall??'N/A'}</span></div><ul>${bullets.map(([label,body])=>`<li><b>${label}</b> · ${esc(body)}</li>`).join('')}</ul><details><summary><span aria-hidden="true">📋</span> Full coach report</summary><p>${esc(r.take)}</p><p class="small"><b>Next session</b> · ${esc(assignment)}</p></details></section>`;
 }
 function vOverview(){
   const ms=M?M.matches:[]; const last=ms[0]; const f=form(ms.slice(0,10));
@@ -480,7 +481,7 @@ function vOverview(){
   
   h+=`<div class="card s2" style="animation-delay:.18s"><div class="h"><h2>Recent games</h2><a class="pill i" href="#matches">All games</a></div>
     ${ms.length?ms.slice(0,5).map(matchRow).join(''):'<div class="empty">No games tracked yet. They appear after the next refresh.</div>'}</div>`;
-  h+=shotAnalysis()+trackedRecords()+lineChemistry();
+  h+=shotAnalysis()+trackedRecords()+playerRecords()+lineChemistry();
   if(cht.length) h+=`<div class="card s2" style="animation-delay:.22s"><div class="h"><h2>Match trends</h2><span class="pill">${cht.length} signals · ChelHead</span></div>${cht.map((i,k)=>insightRow(i,'t'+k)).join('')}<div class="small muted" style="margin-top:10px">As of ${chAt('matchTrends')}.</div></div>`;
   if(false) h+=`<div class="card s2" style="animation-delay:.28s"><div class="h"><h2>Coach's signals</h2><span class="pill">From career and recent games</span></div>${signals().map(s=>`<div class="row"><span class="bar" style="background:${s.c}"></span><div class="grow"><b>${s.t}</b><div class="small muted">${s.d}</div></div><span class="v" style="color:${s.c}">${s.v}</span></div>`).join('')}</div>`;
   h+=`<div class="card s4" style="animation-delay:.3s"><div class="h"><h2>Club profile</h2><span class="pill">Division ${esc(D.clubStats.currentDivision)}</span></div>${clubProfile()}</div>`;
@@ -517,15 +518,50 @@ function rosterTile(p){const c=col(p.name),a=ART[p.idx%4];const canG=p.gl>0,mode
   <div class="body"><div class="t"><div style="min-width:0"><h3>${esc(dn(p.name))}</h3><div class="sub">${sub1}</div><div class="sub">${sub2}</div></div><div class="dials">${gm?dial(p.cGl,50,'OVERALL'):dial(p.cSk,50,'OVERALL')}</div></div>
   <div class="small muted">Night Grade: <b>${letterGrade(gm?p.glDesk.form:p.skDesk.form)}</b> · ${esc(sessionLabel(lastSession()))}</div>${flip}<div class="stats">${stats}</div>${gm?gaaNote(recorded):''}</div></div>`}
 function tracked3v3(){return (M?.matches||[]).filter(m=>Number(m.gameType)===206&&m.confirmed3v3!==false&&(m.clubId==null||String(m.clubId)==='69789'));}
+const PLAYER_RECORDS=[
+ ['🚀','Most goals','skgoals'],['🎁','Most assists','skassists'],['⭐','Most points','points'],
+ ['🎯','Most shots on goal','skshots'],['🧲','Most takeaways','sktakeaways'],['🛡️','Most blocked shots','skbs'],
+ ['🧤','Most saves','glsaves']
+];
+function playerRecords(player){
+ const names=new Set(player?[player.name]:P.map(p=>p.name));
+ const rows=tracked3v3().flatMap(m=>mplayers(m).filter(x=>names.has(x.name)).map(x=>({m,x})));
+ const records=PLAYER_RECORDS.map(([icon,label,key])=>{
+   const goalie=key==='glsaves';
+   const eligible=rows.filter(({x})=>(x.position==='goalie')===goalie&&(!player||(player.primary==='goalie'||player.fullTimeGoalie)===goalie));
+   const value=x=>key==='points'?(x.skgoals==null||x.skassists==null?null:n(x.skgoals)+n(x.skassists)):x[key]==null?null:n(x[key]);
+   const best=Math.max(0,...eligible.map(({x})=>value(x)??0));
+   if(!best)return '';
+   const ties=eligible.filter(({x})=>value(x)===best);
+   const gameButton=({m,x})=>`<button class="row mrow" data-match="${esc(m.id)}"><span class="grow"><b>${esc(dn(x.name))}</b><span class="small muted"> · vs ${esc(m.opp.name||'Unknown club')}</span></span><b>${best}</b></button>`;
+   if(ties.length===1){
+     const [{x,m}]=ties;
+     return `<button class="row mrow" data-match="${esc(m.id)}"><span class="grow"><b><span aria-hidden="true">${icon}</span> ${label}</b><span class="small muted"> · ${player?'':esc(dn(x.name))+' · '}vs ${esc(m.opp.name||'Unknown club')}</span></span><b>${best}</b></button>`;
+   }
+   return `<details class="record-tie"><summary><span aria-hidden="true">${icon}</span> <b>${label}</b> · ${best} <span class="small muted">· ${ties.length} tied performances</span></summary>${ties.map(gameButton).join('')}</details>`;
+ }).join('');
+ return `<section class="card s4"><div class="h"><h2><span aria-hidden="true">🌟</span> ${player?'Player Records':'Individual Records'}</h2><span class="pill">Single game · Tracked 3v3</span></div>${records||'<p>No verified single-game highs for this player yet.</p>'}</section>`;
+}
+function teamHonors(games){
+ const titles=games.filter(m=>competition(m)==='title');
+ const cupCount=Number(D.clubStats?.totalCupsWon);
+ const titleCount=Number(D.clubStats?.titlesWon);
+ const honors=[
+   ['🏆 Championships','Unverified'],
+   ['🥇 Division Titles',titleCount>0?`${titleCount} reported`:titles.length?`${titles.length} tracked`:'Unverified'],
+   ['🏒 Club Championships',cupCount>0?`${cupCount} cups reported`:'Unverified']
+ ];
+ return `<h3><span aria-hidden="true">🏅</span> Team Honors</h3><div class="stats">${honors.map(([label,value])=>tile(label,esc(value))).join('')}</div><p class="small muted">EA reports ${esc(D.clubStats?.titlesWon??'no count for')} division titles and ${esc(D.clubStats?.totalCupsWon??'no count for')} club cups. The saved record does not establish complete championship history. Club Finals game wins alone do not count as championships.</p>`;
+}
 function trackedRecords(){
  const games=tracked3v3();
  const splits=[['All tracked games',games],['Regular season',games.filter(m=>['regular','title'].includes(competition(m)))],['Club Finals',games.filter(m=>competition(m)==='playoffs')]];
- const highs=[['Most goals',m=>m.us.score],['Most shots',m=>m.us.shots],['Largest win margin',m=>result(m).w?m.us.score-m.opp.score:null]];
+ const highs=[['🚀 Most goals',m=>m.us.score],['🎯 Most shots',m=>m.us.shots],['💥 Largest win margin',m=>result(m).w?m.us.score-m.opp.score:null]];
  const records=highs.map(([label,metric])=>{
    const best=games.reduce((a,m)=>metric(m)!=null&&(!a||metric(m)>metric(a))?m:a,null);
    return best?`<button class="row mrow" data-match="${esc(best.id)}"><span class="grow"><b>${label}</b><span class="small muted"> · vs ${esc(best.opp.name)}</span></span><b>${metric(best)}</b></button>`:'';
  }).join('');
- return `<section class="card s4"><div class="h"><h2>Astroneers Records</h2><span class="pill">Tracked 3v3</span></div><div class="stats">${splits.map(([label,games])=>{const {w,l,o}=form(games);return tile(label,games.length?`${w}–${l}–${o}`:'Unavailable');}).join('')}</div>${records}</section>`;
+ return `<section class="card s4"><div class="h"><h2><span aria-hidden="true">🏆</span> Astroneers Records</h2><span class="pill">Tracked 3v3</span></div><div class="stats">${splits.map(([label,games])=>{const {w,l,o}=form(games);return tile(label,games.length?`${w}–${l}–${o}`:'Unavailable');}).join('')}</div>${records}${teamHonors(games)}</section>`;
 }
 function lineChemistry(){
  const names=new Set(P.map(p=>p.name)),groups=new Map();
@@ -545,7 +581,7 @@ function lineChemistry(){
    const rating=Math.round(100*(n*performance+2)/(n+4));
    return {players,stats,rating};
  }).sort((a,b)=>b.rating-a.rating||b.stats.n-a.stats.n);
- return `<section class="card s4"><h2>Line Chemistry</h2><p class="small muted">Team results when both players recorded an active skater appearance in the same game. Rating weights win rate (60%) and goal share (40%), with small samples pulled toward 50.</p>${rows.length?`<div class="tscroll"><table><thead><tr><th>Skater pair</th><th>Rating / 100</th><th>GP</th><th>W–L–OTL</th><th>Goals for / against</th><th>Goal diff. / game</th></tr></thead><tbody>${rows.map(({players,stats,rating})=>{const {w,l,o,gf,ga,n}=stats;return `<tr><td>${players.map(name=>esc(dn(name))).join(' + ')}</td><td><span class="pill i"><b>${rating}</b></span></td><td>${n}</td><td>${w}–${l}–${o}</td><td>${gf} / ${ga}</td><td>${gf>ga?'+':''}${((gf-ga)/n).toFixed(2)}</td></tr>`;}).join('')}</tbody></table></div>`:'<p>No verified skater pairs yet.</p>'}</section>`;
+ return `<section class="card s4"><h2><span aria-hidden="true">⚡</span> Line Chemistry</h2><p class="small muted">Team results when both players recorded an active skater appearance in the same game. Rating weights win rate (60%) and goal share (40%), with small samples pulled toward 50.</p>${rows.length?`<div class="tscroll"><table><thead><tr><th>Skater pair</th><th>Rating / 100</th><th>GP</th><th>W–L–OTL</th><th>Goals for / against</th><th>Goal diff. / game</th></tr></thead><tbody>${rows.map(({players,stats,rating})=>{const {w,l,o,gf,ga,n}=stats;return `<tr><td>${players.map(name=>esc(dn(name))).join(' + ')}</td><td><span class="pill i"><b>${rating}</b></span></td><td>${n}</td><td>${w}–${l}–${o}</td><td>${gf} / ${ga}</td><td>${gf>ga?'+':''}${((gf-ga)/n).toFixed(2)}</td></tr>`;}).join('')}</tbody></table></div>`:'<p>No verified skater pairs yet.</p>'}</section>`;
 }
 function clubProfile(){const c=D.clubStats,f=form(M?.matches||[]),latest=form(lastSession());
  const items=[['Club','Astroneers · 69789'],['Mode','EASHL 3v3'],['Playoffs tracked',(M?.matches||[]).filter(m=>competition(m)==='playoffs').length],['Regular-season games',(M?.matches||[]).filter(m=>competition(m)==='regular').length],['Verified division-title games',(M?.matches||[]).filter(m=>competition(m)==='title').length],['Tracked record',`${f.w}–${f.l}–${f.o}`],['Verified games tracked',f.n],['Goals for / against',`${f.gf} / ${f.ga}`],['Goals / game',f.n?f.gfpg.toFixed(2):'Unavailable'],['Goals against / game',f.n?f.gapg.toFixed(2):'Unavailable'],['Shots for / against',`${f.sf} / ${f.sa}`],['Shot share',f.sf+f.sa?pct1(f.sf/(f.sf+f.sa)):'Unavailable'],['Latest full night',`${latest.w}–${latest.l+latest.o} · ${latest.n} games`],['Roster','Moose · Flappy · Gordy · Gumbo'],['Starting goalie','Gumbo Slice Jr']];
@@ -576,7 +612,7 @@ function shotAnalysis(p){
  })));
  const gp=list.reduce((sum,player)=>sum+n(player[pre+'gp']),0);
  const zones=(layout,where,index)=>Object.fromEntries(layout.map(q=>[q[index],['Shots','Goals'].map(metric=>list.reduce((sum,player)=>sum+n(player[field(metric,where,q[index])]),0))]));
- return `<section class="card s4"><div class="h"><h2>${goalie?'Shot Location Against':'Shot Location Analysis'}${p?' · '+esc(dn(p.name)):''}</h2><span class="pill">Club report</span></div><p class="small muted">${p?'Astroneers club-report totals for this role.':'Combined club-report locations for current roster skaters.'} May include historical modes. Saved 3v3 box scores do not include shot locations.</p>${gp?zoneToggle(id,!p)+zonesHtml({ice:zones(ICE,'Ice',2),net:zones(NET,'Net',1)},id,goalie,gp):'<p>No verified shot location fields are available.</p>'}</section>`;
+ return `<section class="card s4"><div class="h"><h2><span aria-hidden="true">🎯</span> ${goalie?'Shot Location Against':'Shot Location Analysis'}${p?' · '+esc(dn(p.name)):''}</h2><span class="pill">Club report</span></div><p class="small muted">${p?'Astroneers club-report totals for this role.':'Combined club-report locations for current roster skaters.'} May include historical modes. Saved 3v3 box scores do not include shot locations.</p>${gp?zoneToggle(id,!p)+zonesHtml({ice:zones(ICE,'Ice',2),net:zones(NET,'Net',1)},id,goalie,gp):'<p>No verified shot location fields are available.</p>'}</section>`;
 }
 function zonesHtml(z,id,goalie,gp){
  const m=zoneMode[id]||'shots',view=zoneView[id]||'total',idx=m==='goals'?1:0;
@@ -673,7 +709,7 @@ function vPlayers(){
   h+=`<nav class="card s4 player-tabs" aria-label="Player sections">${[['summary','Summary'],['trends','Trends'],['stats','Stats'],['games','Games'],['shots','Shot Locations']].map(([k,l])=>`<button class="chip" data-player-section="${k}" aria-pressed="${playerSection===k}">${l}</button>`).join('')}</nav>`;
   if(playerSection==='shots')return h+shotAnalysis(p);
   if(playerSection==='trends')return h+leagueComparison(p)+playerAnalytics(p);
-  if(playerSection==='stats')return h+detailedPlayerStats(p);
+  if(playerSection==='stats')return h+playerRecords(p)+detailedPlayerStats(p);
   if(playerSection==='games')return h+detailedPlayerStats(p,true);
   if(p.fullTimeGoalie||p.primary==='goalie'){const r=recordedRosterStats(p);h+=`<section class="card s4"><h2>Goaltending</h2><div class="stats">${tile('Goals Allowed',r.goalsAgainst??'Unavailable')}${tile('GA / Game',r.gaPerGame==null?'Unavailable':r.gaPerGame.toFixed(2))}</div>${gaaNote(r)}</section>`;}
 
