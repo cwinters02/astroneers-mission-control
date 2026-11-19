@@ -424,7 +424,15 @@ function leagueComparison(p){
  if(goalie){const sv=total('glsaves'),sa=total('glshots');metrics=[{label:'Save percentage',actual:sv==null||!sa?null:sv/sa,average:b?.roles?.goalie?.savePct??null,percent:true,lower:false}];}
  else metrics=[['Goals','skgoals','goals',false],['Assists','skassists','assists',false],['Takeaways','sktakeaways','takeaways',false],['Giveaways','skgiveaways','giveaways',true],['Blocked shots','skbs','blocks',false]].map(([label,k,bk,lower])=>({label,actual:total(k)==null?null:total(k)/rows.length,average:ref(bk),percent:false,lower}));
  const available=metrics.filter(x=>x.actual!=null&&x.average>0),maxRatio=Math.max(1.5,...available.map(x=>x.actual/x.average));
- const chart=metrics.map(q=>{const ratio=q.average>0&&q.actual!=null?q.actual/q.average:null;return `<div class="league-row"><div class="h"><b>${q.label}${q.lower?' ↓ lower is better':''}</b><span class="small muted">${ratio==null?'No complete sample':(100*ratio).toFixed(0)+'% of role average'}</span></div><div class="league-bar"><span>You · ${fmt(q.actual,q.percent)}</span><div class="league-track"><i style="width:${ratio==null?0:100*ratio/maxRatio}%;background:var(--ice)"></i></div></div><div class="league-bar"><span>3v3 avg · ${fmt(q.average,q.percent)}</span><div class="league-track"><i style="width:${q.average>0?100/maxRatio:0}%;background:var(--crimson)"></i></div></div></div>`}).join('');
+ const difference=q=>{
+   if(q.actual==null||q.average==null)return 'No complete sample';
+   const delta=q.actual-q.average;
+   const amount=(Math.abs(delta)*(q.percent?100:1)).toFixed(q.percent?1:2);
+   if(Number(amount)===0)return 'At role average';
+   if(q.percent)return `${amount} percentage points ${delta>0?'above':'below'} average`;
+   return `${amount} ${delta>0?'more':'fewer'} per game`;
+ };
+ const chart=metrics.map(q=>{const ratio=q.average>0&&q.actual!=null?q.actual/q.average:null;return `<div class="league-row"><div class="h"><b>${q.label}${q.lower?' ↓ lower is better':''}</b><span class="small muted">${difference(q)}</span></div><div class="league-bar"><span>You · ${fmt(q.actual,q.percent)}</span><div class="league-track"><i style="width:${ratio==null?0:100*ratio/maxRatio}%;background:var(--ice)"></i></div></div><div class="league-bar"><span>3v3 avg · ${fmt(q.average,q.percent)}</span><div class="league-track"><i style="width:${q.average>0?100/maxRatio:0}%;background:var(--crimson)"></i></div></div></div>`}).join('');
  return `<section class="card s4" aria-label="Player vs average EASHL 3v3"><div class="h"><h2>📊 ${esc(dn(p.name))} vs average EASHL 3v3</h2><div class="chips" role="group" aria-label="Comparison sample"><button class="chip" data-league-scope="night" aria-pressed="${leagueScope==='night'}">Last Night</button><button class="chip" data-league-scope="history" aria-pressed="${leagueScope==='history'}">Tracked 3v3 history</button></div></div><p class="small">${leagueScope==='night'?esc(sessionLabel(lastSession())):'All verified stored 3v3 games'} · ${rows.length} active ${goalie?'goalie':'skater'} appearances. ${goalie?'Human goalies only; skater games excluded.':'Per appearance; benchmark follows the actual position played.'}</p>${available.length?`<div class="league-chart" role="img" aria-label="Grouped bars comparing ${esc(dn(p.name))} with the average at the same 3v3 position. Exact values follow in a table.">${chart}</div>`:'<p>Not enough verified player or league data for this comparison.</p>'}<details style="margin-top:16px"><summary>Exact values & benchmark details</summary><div class="tscroll"><table><thead><tr><th>Metric</th><th>${esc(dn(p.name))}</th><th>3v3 role average</th><th>Direction</th></tr></thead><tbody>${metrics.map(q=>`<tr><td>${q.label}</td><td>${fmt(q.actual,q.percent)}</td><td>${fmt(q.average,q.percent)}</td><td>${q.lower?'Lower is better':'Higher is better'}</td></tr>`).join('')}</tbody></table></div><p class="small muted">ChelHead tracked-population reference averages, verified ${esc(b?.checkedAt?.slice(0,10)||'date unavailable')}. Rounded model references, not a census of every EASHL player. Missing fields are excluded, never estimated. DNF appearances are not time-scaled without verified ice time. Career totals may include other modes, so this graph uses stored confirmed 3v3 games only. ${goalie?'No verified league shot-volume/GAA baseline is available, so those comparisons are not drawn.':''}</p></details></section>`;
 }
 
@@ -619,10 +627,68 @@ const TABS={
  'Goalie · Games':['glgp','glwinpct','glgc','glDNF','glDNFmm','glQuitDisc','glwinnerByDnf','glprevwins','glprevso'],
  'Every EA field':null
 };
-let tab='Skater · Basic',sortK='skpoints',perGameT=false,rawQ='';
+const CLUB_TABS={
+ 'Skater · Basic':['overall','skgp','skgoals','skassists','skpoints','skpointspg','skplusmin','skpim','skshots','skshotpct','toipg'],
+ 'Skater · Offense':['skppg','skshg','skgwg','skshotattempts','skshotonnetpct','skshotspg','skdeflections'],
+ 'Skater · Possession':['skpossession','skpasses','skpassattempts','skpasspct','sksaucerpasses','skfow','skfol','skfop'],
+ 'Skater · Defense':['skhits','skbs','sktakeaways','skgiveaways','tkgv','skinterceptions','skpkclearzone','skpenaltiesdrawn'],
+ 'Skater · Games':['skgp','wins','losses'],
+ 'Goalie · Basic':['overall','glgp','glwins','gllosses','glgaa','svPct','glshots','glsaves','glga','gltoipg'],
+ 'Goalie · Advanced':['glbrksaves','glbrkshots','brkSv','glpensaves','glpenshots','penSv','gldsaves','glpokechecks','glpkclearzone'],
+ 'Goalie · Games':['glgp','glwins','gllosses']
+};
+let tab='Skater · Basic',sortK='skpoints',perGameT=false,rawQ='',statsScope='club';
+function clubTableStat(p,rows,k){
+ const goalie=p.fullTimeGoalie||p.primary==='goalie';
+ if(k==='overall')return {value:(goalie?p.glDesk:p.skDesk)?.overall};
+ if(k==='skgp'||k==='glgp')return {value:rows.length};
+ if(['wins','losses','glwins','gllosses'].includes(k))
+   return {value:rows.filter(({m})=>result(m).w===(k==='wins'||k==='glwins')).length};
+ const formulas={
+   skpoints:[['skgoals','skassists'],([g,a],count)=> (g+a)/(perGameT?count:1)],
+   skpointspg:[['skgoals','skassists'],([g,a],count)=>(g+a)/count],
+   skshotspg:[['skshots'],([shots],count)=>shots/count],
+   skshotpct:[['skgoals','skshots'],([a,b])=>b>0?100*a/b:null],
+   skshotonnetpct:[['skshots','skshotattempts'],([a,b])=>b>0?100*a/b:null],
+   skpasspct:[['skpasses','skpassattempts'],([a,b])=>b>0?100*a/b:null],
+   skfop:[['skfow','skfol'],([a,b])=>a+b>0?100*a/(a+b):null],
+   tkgv:[['sktakeaways','skgiveaways'],([a,b])=>b>0?a/b:null],
+   toipg:[['toiseconds'],([seconds],count)=>seconds/count],
+   gltoipg:[['toiseconds'],([seconds],count)=>seconds/count],
+   svPct:[['glsaves','glshots'],([a,b])=>b>0?a/b:null],
+   brkSv:[['glbrksaves','glbrkshots'],([a,b])=>b>0?a/b:null],
+   penSv:[['glpensaves','glpenshots'],([a,b])=>b>0?a/b:null],
+   glgaa:[['glga','toiseconds'],([a,b])=>b>0?3600*a/b:null]
+ };
+ const [keys,calculate]=formulas[k]||[[k],([value],count)=>value/(perGameT?count:1)];
+ const available=rows.filter(({x})=>keys.every(key=>x[key]!=null&&Number.isFinite(Number(x[key]))));
+ const sums=keys.map(key=>available.reduce((total,{x})=>total+n(x[key]),0));
+ const value=available.length&&(k!=='glgaa'||available.length===rows.length)?calculate(sums,available.length):null;
+ return {value,coverage:available.length};
+}
+function clubStatsTable(){
+ const cols=CLUB_TABS[tab];if(!cols.includes(sortK))sortK=cols[0];
+ const goalie=tab.startsWith('Goalie');
+ const rows=P.filter(p=>Boolean(p.fullTimeGoalie||p.primary==='goalie')===goalie).map(p=>{
+   const games=recordedPlayerRows(p);
+   return {p,count:games.length,cells:Object.fromEntries(cols.map(k=>[k,clubTableStat(p,games,k)]))};
+ }).filter(row=>row.count).sort((a,b)=>(b.cells[sortK].value??-Infinity)-(a.cells[sortK].value??-Infinity));
+ if(!rows.length)return '<div class="empty">No recorded Astroneers 3v3 games for this role.</div>';
+ const display=(k,cell,count)=>{
+   if(cell.value==null)return 'Unavailable';
+   const type=LABEL[k]?.t;
+   const value=type==='sv'?svp(cell.value,1):fmt({[k]:cell.value,gl:goalie?count:0},k,false);
+   return value+(cell.coverage<count?`<br><span class="small muted">${cell.coverage} of ${count} games</span>`:'');
+ };
+ return `<div class="tscroll"><table><thead><tr><th scope="col">Player</th>${cols.map(k=>`<th scope="col" tabindex="0" data-sort="${k}" class="${k===sortK?'sorted':''}">${esc(k==='overall'?'Overall':short(k))}</th>`).join('')}</tr></thead><tbody>${rows.map(({p,cells,count})=>`<tr><td><span class="pdot" style="background:${col(p.name)}"></span>${esc(dn(p.name))}</td>${cols.map(k=>`<td>${display(k,cells[k],count)}</td>`).join('')}</tr>`).join('')}</tbody></table></div><p class="small muted">Totals and rates use the games with the required fields. Partial coverage is shown under the value.</p>`;
+}
 function vStats(){
-  let h=`<div class="card s4"><div class="h"><div class="chips" role="tablist" aria-label="Stat tables">${Object.keys(TABS).map(t=>`<button class="chip" role="tab" data-tab="${esc(t)}" aria-pressed="${t===tab}" aria-selected="${t===tab}">${t}</button>`).join('')}</div>
-   ${TABS[tab]?`<div class="chips"><button class="chip" data-pgt="0" aria-pressed="${!perGameT}">Totals</button><button class="chip" data-pgt="1" aria-pressed="${perGameT}">Per game</button></div>`:`<label class="search"><span style="position:absolute;left:-9999px">Filter fields</span><input id="rawq" placeholder="Filter ${Object.keys(D.members[0]).length} fields…" value="${esc(rawQ)}" autocomplete="off"></label>`}</div>`;
+  const career=statsScope==='career',tabs=career?TABS:CLUB_TABS;
+  if(!(tab in tabs))tab='Skater · Basic';
+  const scope=`<div class="chips" role="group" aria-label="Stats scope"><button class="chip" data-stat-scope="club" aria-pressed="${!career}">Astroneers 3v3</button><button class="chip" data-stat-scope="career" aria-pressed="${career}">Career Stats</button></div><p class="small muted">${career?'Career totals from the Astroneers club report may include historical modes. All-club career totals are unavailable.':'Saved Astroneers 3v3 box scores.'}</p>`;
+  let h=`<div class="card s4">${scope}<div class="h"><div class="chips" role="tablist" aria-label="Stat tables">${Object.keys(tabs).map(t=>`<button class="chip" role="tab" data-tab="${esc(t)}" aria-pressed="${t===tab}" aria-selected="${t===tab}">${t}</button>`).join('')}</div>
+   ${tabs[tab]?`<div class="chips"><button class="chip" data-pgt="0" aria-pressed="${!perGameT}">Totals</button><button class="chip" data-pgt="1" aria-pressed="${perGameT}">Per game</button></div>`:`<label class="search"><span style="position:absolute;left:-9999px">Filter fields</span><input id="rawq" placeholder="Filter ${Object.keys(D.members[0]).length} fields…" value="${esc(rawQ)}" autocomplete="off"></label>`}</div>`;
+  if(!career)return h+clubStatsTable()+'</div>';
   if(TABS[tab]){const cols=TABS[tab]; if(!cols.includes(sortK)) sortK=cols[0];
     const key=p=>{const t=(LABEL[sortK]||{}).t;const v=p[sortK];return t==='s'?0:t==='ovr'?(v==null?-1:v):(perGameT&&(!t||t==='n')?n(v)/((sortK.startsWith('gl')?p.gl:p.sk)||1):n(v))};
     const rows=[...P].filter(p=>!tab.startsWith('Goalie')||p.gl>0).sort((a,b)=>key(b)-key(a));
@@ -642,16 +708,22 @@ function compareClub(p){
  const rows=recordedPlayerRows(p),sum=k=>rows.length&&rows.every(r=>r.x[k]!=null)?rows.reduce((a,r)=>a+n(r.x[k]),0):null;
  const rate=k=>sum(k)==null||!rows.length?null:sum(k)/rows.length;
  const ratio=(a,b)=>sum(a)==null||!sum(b)?null:100*sum(a)/sum(b);
- return {gp:rows.length,points:sum('skgoals')==null||sum('skassists')==null||!rows.length?null:(sum('skgoals')+sum('skassists'))/rows.length,goals:rate('skgoals'),assists:rate('skassists'),shots:rate('skshots'),shooting:ratio('skgoals','skshots'),passing:ratio('skpasses','skpassattempts'),takeaways:rate('sktakeaways'),giveaways:rate('skgiveaways'),hits:rate('skhits'),blocks:rate('skbs')};
+ const passingRows=rows.filter(({x})=>x.skpasses!=null&&x.skpassattempts!=null);
+ const passAttempts=passingRows.reduce((total,{x})=>total+n(x.skpassattempts),0);
+ const passing=passAttempts>0?100*passingRows.reduce((total,{x})=>total+n(x.skpasses),0)/passAttempts:null;
+ return {gp:rows.length,points:sum('skgoals')==null||sum('skassists')==null||!rows.length?null:(sum('skgoals')+sum('skassists'))/rows.length,goals:rate('skgoals'),assists:rate('skassists'),shots:rate('skshots'),shooting:ratio('skgoals','skshots'),passing,passingGames:passingRows.length,takeaways:rate('sktakeaways'),giveaways:rate('skgiveaways'),hits:rate('skhits'),blocks:rate('skbs')};
 }
 function vCompare(){
  const sk=P.filter(p=>!p.fullTimeGoalie&&p.primary!=='goalie');if(!sk.find(p=>p.name===cmpA))cmpA=sk[0]?.name;if(!sk.find(p=>p.name===cmpB))cmpB=sk[1]?.name||cmpA;
  const A=sk.find(p=>p.name===cmpA),B=sk.find(p=>p.name===cmpB);if(!A||!B)return '<div class="card s4">No verified skater data.</div>';
  const opt=v=>sk.map(p=>`<option value="${esc(p.name)}" ${p.name===v?'selected':''}>${esc(dn(p.name))}</option>`).join('');
  const ca=compareClub(A),cb=compareClub(B),show=(v,pct=false)=>v==null?'Unavailable':v.toFixed(2)+(pct?'%':'');
- let h=`<section class="card s4"><div class="h"><h2>Compare</h2><span class="pill">Club Stats · 3v3</span></div><div class="cmp-head"><select id="cmpA" aria-label="First player">${opt(cmpA)}</select><span class="vs">VS</span><select id="cmpB" aria-label="Second player">${opt(cmpB)}</select></div><p class="small muted">Recorded Astroneers games only. ${esc(dn(A.name))}: ${ca.gp} games. ${esc(dn(B.name))}: ${cb.gp} games. Missing fields stay unavailable. Career totals are separate.</p></section>`;
+ const showStat=(stats,key,pct)=>key==='passing'&&stats.passing!=null
+   ? `${stats.passing.toFixed(1)}%<br><span class="small muted">${stats.passingGames} of ${stats.gp} games</span>`
+   : show(stats[key],pct);
+ let h=`<section class="card s4"><div class="h"><h2>Compare</h2><span class="pill">Club Stats · 3v3</span></div><div class="cmp-head"><select id="cmpA" aria-label="First player">${opt(cmpA)}</select><span class="vs">VS</span><select id="cmpB" aria-label="Second player">${opt(cmpB)}</select></div><p class="small muted">Recorded Astroneers games only. ${esc(dn(A.name))}: ${ca.gp} games. ${esc(dn(B.name))}: ${cb.gp} games. Pass % uses games with both completed passes and pass attempts. Career totals are separate.</p></section>`;
  const groups=[['Scoring',[['Points / Game','points'],['Goals / Game','goals'],['Assists / Game','assists'],['Shots / Game','shots'],['Shooting %','shooting',true]]],['Puck Play',[['Pass %','passing',true],['Takeaways / Game','takeaways'],['Giveaways / Game','giveaways'],['Hits / Game','hits'],['Blocks / Game','blocks']]]];
- for(const [label,keys]of groups)h+=`<section class="card s2"><h2>${label}</h2><div class="tscroll"><table><thead><tr><th>Stat</th><th>${esc(dn(A.name))}</th><th>${esc(dn(B.name))}</th></tr></thead><tbody>${keys.map(([l,k,pct])=>`<tr><td>${l}</td><td>${show(ca[k],pct)}</td><td>${show(cb[k],pct)}</td></tr>`).join('')}</tbody></table></div></section>`;
+ for(const [label,keys]of groups)h+=`<section class="card s2"><h2>${label}</h2><div class="tscroll"><table><thead><tr><th>Stat</th><th>${esc(dn(A.name))}</th><th>${esc(dn(B.name))}</th></tr></thead><tbody>${keys.map(([l,k,pct])=>`<tr><td>${l}</td><td>${showStat(ca,k,pct)}</td><td>${showStat(cb,k,pct)}</td></tr>`).join('')}</tbody></table></div></section>`;
  for(const p of P.filter(p=>p.fullTimeGoalie||p.primary==='goalie')){const r=recordedRosterStats(p);h+=`<section class="card s4"><div class="h"><h2>${esc(dn(p.name))} · Starting Goalie</h2><span class="pill">${r.gp} club games</span></div><div class="stats">${tile('Save %',r.svPct==null?'Unavailable':svp(r.svPct,1))}${tile('Saves',r.saves??'Unavailable')}${tile('Shots Faced',r.shotsAgainst??'Unavailable')}${tile('GA / Game',r.gaPerGame==null?'Unavailable':r.gaPerGame.toFixed(2))}</div>${gaaNote(r)}<p class="small muted">Goalie stats are separate from skater comparisons.</p></section>`;}
  return h;
 }
@@ -1013,6 +1085,7 @@ document.addEventListener('click',e=>{
   const mr=e.target.closest('[data-match]'); if(mr){openMatch=mr.dataset.match;location.hash='matches';return}
   const pk=e.target.closest('[data-pick]'); if(pk){selP=pk.dataset.pick;render(true);return}
   const pg=e.target.closest('[data-pg]'); if(pg){perGameP=pg.dataset.pg==='1';render(true);return}
+  const statsToggle=e.target.closest('[data-stat-scope]'); if(statsToggle){statsScope=statsToggle.dataset.statScope;render(true);return}
   const pgt=e.target.closest('[data-pgt]'); if(pgt){perGameT=pgt.dataset.pgt==='1';render(true);return}
   const tb=e.target.closest('[data-tab]'); if(tb){tab=tb.dataset.tab;render(true);return}
   const th=e.target.closest('th[data-sort]'); if(th){sortK=th.dataset.sort;render(true);return}
