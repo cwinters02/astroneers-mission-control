@@ -137,6 +137,11 @@ a{color:inherit}
 .row .v{font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap}
 .mrow{cursor:pointer;border-radius:12px;padding-inline:6px;margin-inline:-6px;background:none;border:0;border-bottom:1px solid var(--line);width:calc(100% + 12px);text-align:left;color:inherit}
 .mrow:hover{background:var(--chip)}
+.overview-coach ul{margin:0 0 12px;padding-left:19px;line-height:1.55}
+.overview-coach li+li{margin-top:5px}
+.overview-coach details{border-top:1px solid var(--line);padding-top:10px}
+.overview-coach summary{cursor:pointer;font-weight:700;padding-block:4px}
+.overview-coach details p{line-height:1.6;margin:10px 0 0}
 /* hot zones */
 .zones{display:grid;grid-template-columns:minmax(0,3fr) minmax(0,2fr);gap:16px;align-items:start}
 .rink-map{display:block;width:100%;height:auto;max-width:550px;margin:0 auto}
@@ -436,6 +441,25 @@ function leagueComparison(p){
  return `<section class="card s4" aria-label="Player vs average EASHL 3v3"><div class="h"><h2>📊 ${esc(dn(p.name))} vs average EASHL 3v3</h2><div class="chips" role="group" aria-label="Comparison sample"><button class="chip" data-league-scope="night" aria-pressed="${leagueScope==='night'}">Last Night</button><button class="chip" data-league-scope="history" aria-pressed="${leagueScope==='history'}">Tracked 3v3 history</button></div></div><p class="small">${leagueScope==='night'?esc(sessionLabel(lastSession())):'All verified stored 3v3 games'} · ${rows.length} active ${goalie?'goalie':'skater'} appearances. ${goalie?'Human goalies only; skater games excluded.':'Per appearance; benchmark follows the actual position played.'}</p>${available.length?`<div class="league-chart" role="img" aria-label="Grouped bars comparing ${esc(dn(p.name))} with the average at the same 3v3 position. Exact values follow in a table.">${chart}</div>`:'<p>Not enough verified player or league data for this comparison.</p>'}<details style="margin-top:16px"><summary>Exact values & benchmark details</summary><div class="tscroll"><table><thead><tr><th>Metric</th><th>${esc(dn(p.name))}</th><th>3v3 role average</th><th>Direction</th></tr></thead><tbody>${metrics.map(q=>`<tr><td>${q.label}</td><td>${fmt(q.actual,q.percent)}</td><td>${fmt(q.average,q.percent)}</td><td>${q.lower?'Lower is better':'Higher is better'}</td></tr>`).join('')}</tbody></table></div><p class="small muted">ChelHead tracked-population reference averages, verified ${esc(b?.checkedAt?.slice(0,10)||'date unavailable')}. Rounded model references, not a census of every EASHL player. Missing fields are excluded, never estimated. DNF appearances are not time-scaled without verified ice time. Career totals may include other modes, so this graph uses stored confirmed 3v3 games only. ${goalie?'No verified league shot-volume/GAA baseline is available, so those comparisons are not drawn.':''}</p></details></section>`;
 }
 
+function overviewCoachCard(r){
+ const rows=r.desk.rows;
+ const goalie=r.desk.benchmark.role==='goalie';
+ const total=k=>rows.length&&rows.every(({x})=>x[k]!=null)?rows.reduce((sum,{x})=>sum+n(x[k]),0):null;
+ const stats=[`${rows.length} ${rows.length===1?'game':'games'}`];
+ const add=(value,label)=>{if(value!=null)stats.push(`${value} ${label}`);};
+ if(goalie){
+   const saves=total('glsaves'),shots=total('glshots');
+   if(saves!=null&&shots>0)stats.push(`${saves}/${shots} saves (${svp(saves,shots)})`);
+   add(total('glga'),'GA');
+ }else{
+   const goals=total('skgoals'),assists=total('skassists');
+   add(goals,'G');add(assists,'A');add(goals!=null&&assists!=null?goals+assists:null,'P');
+   add(total('skshots'),'SOG');add(total('skgiveaways'),'GV');
+ }
+ const assignment=(r.assignment||'').replace(/^Next session:\s*/i,'');
+ const bullets=[['What went well',r.highlight||'No verified appearance to assess.'],['Work on',r.focus||assignment],['Key stats',rows.length?stats.join(' · '):'No verified stats for this session.']];
+ return `<section class="card s2 overview-coach"><div class="h"><h2>${esc(dn(r.name))}</h2><span class="pill">Night Grade ${letterGrade(r.main)} · Overall ${r.desk.overall??'N/A'}</span></div><ul>${bullets.map(([label,body])=>`<li><b>${label}</b> · ${esc(body)}</li>`).join('')}</ul><details><summary>Full coach report</summary><p>${esc(r.take)}</p><p class="small"><b>Next session</b> · ${esc(assignment)}</p></details></section>`;
+}
 function vOverview(){
   const ms=M?M.matches:[]; const last=ms[0]; const f=form(ms.slice(0,10));
   const gd=ms.slice(0,10).reverse().map(m=>n(m.us.score)-n(m.opp.score));
@@ -452,7 +476,7 @@ function vOverview(){
   const chi=CH().insights||[], cht=CH().matchTrends||[];
   const ci=coachInsights().slice(0,5);
   h+=`<div class="card s4" style="animation-delay:.16s"><div class="h">${coachHead('Coach’s feedback · latest session')}<a class="pill i" href="#coach">Full report & ratings</a></div><p style="line-height:1.6">${esc(ci[0]?.body||'Waiting for a verified session.')}</p><div class="small muted">Coaching priorities inferred from box scores; no video reviewed. Night grades blend verified position-specific 3v3 league context with personal form.</div></div>`;
-  h+=P.map(p=>scout(p.name)).filter(Boolean).map(r=>`<div class="card s2"><div class="h"><h2>${esc(dn(r.name))}</h2><span class="pill">Night Grade ${letterGrade(r.main)} · Overall ${r.desk.overall??'N/A'}</span></div><p style="line-height:1.7;margin:0 0 12px">${esc(r.take)}</p><div class="small" style="line-height:1.6"><b>Next session:</b> ${esc(r.assignment||'Collect another active game before setting a target.')}</div></div>`).join('');
+  h+=P.map(p=>scout(p.name)).filter(Boolean).map(overviewCoachCard).join('');
   
   h+=`<div class="card s2" style="animation-delay:.18s"><div class="h"><h2>Recent games</h2><a class="pill i" href="#matches">All games</a></div>
     ${ms.length?ms.slice(0,5).map(matchRow).join(''):'<div class="empty">No games tracked yet. They appear after the next refresh.</div>'}</div>`;
@@ -1075,6 +1099,8 @@ function scout(name){
   praise=coachPick(name,0,[`You gave us ${total}. Your strongest save-rate game was ${good}.`,`The ${good} performance is the one we want to build on. You finished with ${total}.`,`I liked the result in net: ${total}. ${good} was your best save-rate appearance.`,`Our starting goalie finished with ${total}; the high point was ${good}.`]);
   old.criticism=coachPick(name,1,[`${weak} was the low point. A good overall night still leaves that game to clean up.`,`The criticism is the gap between appearances: ${weak} was your lowest save rate. We need a more reliable floor.`,`My concern is ${weak}. That is the first game we review, even with the stronger saves elsewhere.`,`You earned the grade, but ${weak} needs attention. That was your weakest recorded save-rate game.`]);
   old.assignment=coachPick(name,2,[`Review the ${worst.m.opp.name} goals. Sort first shots, rebounds and passes across before choosing the practice work.`,`Bring the ${worst.m.opp.name} goal clips. Identify the repeatable problem first; don't rebuild your technique from a scoreline.`,`For the next review, start with ${worst.m.opp.name}. Check the goals one at a time and pick one correction the clips actually support.`,`Audit the ${worst.m.opp.name} goals before the next session. Separate the saves you can improve from the chances the team must defend better.`]);
+  old.highlight='Best save-rate game: '+good+'.';
+  old.focus='Review the lowest save-rate game: '+weak+'.';
   old.strengths.push(good+'.');
  }else{
   const pts=r=>n(r.x.skgoals)+n(r.x.skassists),best=[...rr].sort((a,b)=>pts(b)-pts(a))[0],worst=[...rr].filter(r=>r.x.skgiveaways!=null).sort((a,b)=>n(b.x.skgiveaways)-n(a.x.skgiveaways))[0];
@@ -1084,6 +1110,8 @@ function scout(name){
   old.criticism=issue?coachPick(name,1,[`The part I want reviewed is ${issue}. The scoring earns credit; it doesn't close the discussion on puck decisions.`,`My criticism is puck management in the ${worst.m.opp.name} game: ${stat(worst,'skgiveaways')} giveaways. We need to identify which decisions were avoidable.`,`There is more to give us with the puck: ${issue}. That's the game to check before we call the night complete.`,`The number that needs attention is ${issue}. We can keep the production and still improve the next decision.`]):'Giveaways were not reported. We cannot grade those decisions from a blank field; review the available scoring sample instead.';
   if(d.benchmark.role==='defender')old.assignment=coachPick(name,2,['On the next breakout, identify the short outlet before moving the puck. Stay available behind both forwards until somebody rotates back.','Make the first pass clean, then support it. If the forwards are both ahead of you, hold a recovery option instead of joining the same rush.','Next session: scan before collecting the puck and use the available outlet. We need your offense with somebody still protecting the return route.','Keep moving pucks to the forwards, but leave yourself a recovery route. Review the turnover game for the first pass you could simplify.']);
   else old.assignment=coachPick(name,2,['Next session: scan before the lane closes. Use the short pass, move into space and make yourself available for the return.','Give the puck carrier a close option. After the pass, move again. Review the turnover game for chances to recycle rather than force it.','Keep attacking the good shooting lane. When it disappears, find support and get back into the play instead of extending the possession alone.','Make the next possession a connected play: offer an outlet, move after your pass and recover through the middle when it turns over.']);
+  old.highlight='Most productive game: '+high+'.';
+  old.focus=issue?'Review puck decisions: '+issue+'.':null;
   old.strengths.push(high+'.');
  }
  old.take=`${dn(name)}. ${praise} ${old.criticism}`;
