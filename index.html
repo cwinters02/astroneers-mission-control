@@ -457,7 +457,7 @@ function leagueComparison(p){
      metric('Shots Faced / Game',['glshots'],rate,{average:ref?.shotsFacedPerGame}),
      metric('Goals Against (GA)',['glga'],count,{lower:true}),
      metric('Goals Against / Game',['glga'],rate,{average:ref?.goalsAgainstPerGame,lower:true}),
-     metric('Goals Against Average (GAA)',['glga','toiseconds'],([ga,sec],games)=>games===rows.length&&sec>0?3600*ga/sec:null,{average:ref?.gaa,lower:true}),
+     metric('Goals Against Average (GAA)',['glga','toiseconds'],([ga,sec])=>sec>0?3600*ga/sec:null,{average:ref?.gaa,lower:true}),
      metric('Breakaway Saves',['glbrksaves'],count),
      metric('Breakaway Shots Faced',['glbrkshots'],count),
      metric('Breakaway Save %',['glbrksaves','glbrkshots'],ratio,{percent:true}),
@@ -482,7 +482,7 @@ function leagueComparison(p){
    return `${amount} ${delta>0?'more':'fewer'} per game`;
  };
  const chart=(goalie?available:metrics).map(q=>{const ratio=q.average>0&&q.actual!=null?q.actual/q.average:null;return `<div class="league-row"><div class="h"><b>${q.label}${q.lower?' ↓ lower is better':''}</b><span class="small muted">${difference(q)}</span></div><div class="league-bar"><span>You · ${fmt(q.actual,q.percent)}</span><div class="league-track"><i style="width:${ratio==null?0:100*ratio/maxRatio}%;background:var(--ice)"></i></div></div><div class="league-bar"><span>3v3 avg · ${fmt(q.average,q.percent)}</span><div class="league-track"><i style="width:${q.average>0?100/maxRatio:0}%;background:var(--crimson)"></i></div></div></div>`}).join('');
- return `<section class="card s4" aria-label="Player vs average EASHL 3v3"><div class="h"><h2>📊 ${esc(dn(p.name))} vs average EASHL 3v3</h2><div class="chips" role="group" aria-label="Comparison sample"><button class="chip" data-league-scope="night" aria-pressed="${leagueScope==='night'}">Last Night</button><button class="chip" data-league-scope="history" aria-pressed="${leagueScope==='history'}">Tracked 3v3 history</button></div></div><p class="small">${leagueScope==='night'?esc(sessionLabel(lastSession())):'All verified stored 3v3 games'} · ${rows.length} active ${goalie?'goalie':'skater'} appearances. ${goalie?'Human goalies only; skater games excluded.':'Per appearance; benchmark follows the actual position played.'}</p>${available.length?`<div class="league-chart" role="img" aria-label="Grouped bars comparing ${esc(dn(p.name))} with the average at the same 3v3 position. Exact values follow in a table.">${chart}</div>`:'<p>Not enough verified player or league data for this comparison.</p>'}<details style="margin-top:16px" ${goalie?'open':''}><summary>${goalie?'All goalie stats & league benchmarks':'Exact values & benchmark details'}</summary><div class="tscroll"><table><thead><tr><th>Metric</th><th>${esc(dn(p.name))}</th><th>3v3 role average</th>${goalie?'<th>Games with data</th>':'<th>Direction</th>'}</tr></thead><tbody>${metrics.map(q=>`<tr><td>${q.label}</td><td>${fmt(q.actual,q.percent)}</td><td>${fmt(q.average,q.percent)}</td><td>${goalie?`${q.count} of ${rows.length}`:q.lower?'Lower is better':'Higher is better'}</td></tr>`).join('')}</tbody></table></div><p class="small muted">ChelHead tracked-population reference averages, verified ${esc(b?.checkedAt?.slice(0,10)||'date unavailable')}. Rounded model references, not a census of every EASHL player. Missing fields are excluded, never estimated. DNF appearances are not time-scaled without verified ice time. Career totals may include other modes, so this graph uses stored confirmed 3v3 games only. ${goalie?'Only save percentage has a verified league benchmark in the current data. The other rows show recorded goalie stats and their coverage. GAA requires ice time for every appearance in the selected sample.':''}</p></details></section>`;
+ return `<section class="card s4" aria-label="Player vs average EASHL 3v3"><div class="h"><h2>📊 ${esc(dn(p.name))} vs average EASHL 3v3</h2><div class="chips" role="group" aria-label="Comparison sample"><button class="chip" data-league-scope="night" aria-pressed="${leagueScope==='night'}">Last Night</button><button class="chip" data-league-scope="history" aria-pressed="${leagueScope==='history'}">Tracked 3v3 history</button></div></div><p class="small">${leagueScope==='night'?esc(sessionLabel(lastSession())):'All verified stored 3v3 games'} · ${rows.length} active ${goalie?'goalie':'skater'} appearances. ${goalie?'Human goalies only; skater games excluded.':'Per appearance; benchmark follows the actual position played.'}</p>${available.length?`<div class="league-chart" role="img" aria-label="Grouped bars comparing ${esc(dn(p.name))} with the average at the same 3v3 position. Exact values follow in a table.">${chart}</div>`:'<p>Not enough verified player or league data for this comparison.</p>'}<details style="margin-top:16px" ${goalie?'open':''}><summary>${goalie?'All goalie stats & league benchmarks':'Exact values & benchmark details'}</summary><div class="tscroll"><table><thead><tr><th>Metric</th><th>${esc(dn(p.name))}</th><th>3v3 role average</th>${goalie?'<th>Games with data</th>':'<th>Direction</th>'}</tr></thead><tbody>${metrics.map(q=>`<tr><td>${q.label}</td><td>${fmt(q.actual,q.percent)}</td><td>${fmt(q.average,q.percent)}</td><td>${goalie?`${q.count} of ${rows.length}`:q.lower?'Lower is better':'Higher is better'}</td></tr>`).join('')}</tbody></table></div><p class="small muted">ChelHead tracked-population reference averages, verified ${esc(b?.checkedAt?.slice(0,10)||'date unavailable')}. Rounded model references, not a census of every EASHL player. Missing fields are excluded, never estimated. DNF appearances are not time-scaled without verified ice time. Career totals may include other modes, so this graph uses stored confirmed 3v3 games only. ${goalie?'Only save percentage has a verified league benchmark in the current data. The other rows show recorded goalie stats and their coverage. GAA uses only games with verified ice time. Coverage shows how many games were included.':''}</p></details></section>`;
 }
 
 function overviewCoachCard(r){
@@ -746,6 +746,23 @@ function detailedPlayerStats(p,logOnly=false){
  return controls+(logOnly?log:cards+positionCard);
 }
 
+function goalieSummary(p){
+ const r=recordedRosterStats(p),rows=recordedPlayerRows(p);
+ const viewCount=value=>value==null?'Unavailable':value;
+ const rate=value=>value==null||!r.gp?'Unavailable':(value/r.gp).toFixed(2);
+ const tracked=rows.filter(({x})=>x.glga!=null&&n(x.toiseconds)>0);
+ const seconds=tracked.reduce((sum,{x})=>sum+n(x.toiseconds),0);
+ const gaa=seconds?3600*tracked.reduce((sum,{x})=>sum+n(x.glga),0)/seconds:null;
+ const covered=(value,games)=>value==null?'Unavailable':`${value}${games<r.gp?`<small>${games} of ${r.gp} games</small>`:''}`;
+ const situations=[['Breakaway Save %','brkSv'],['Penalty Shot Save %','penSv'],['Desperation Saves','gldsaves'],['Poke Checks','glpokechecks'],['PK Clears','glpkclearzone']].map(([label,key])=>{
+   const stat=clubTableStat(p,rows,key,perGameP);
+   const value=stat.value==null?null:key.endsWith('Sv')?svp(stat.value,1):Number(stat.value.toFixed(2));
+   const title=perGameP&&!key.endsWith('Sv')?label+' / Game':label;
+   return tile(title,covered(value,stat.coverage));
+ }).join('');
+ const record=r.gp?`${r.record.w}–${r.record.l}–${r.record.o}`:'Unavailable';
+ return `<section class="card s4"><div class="h"><h2>🧤 Goaltending Summary</h2><span class="pill">Tracked Astroneers 3v3</span></div><div class="stats">${tile('Team Record in Net',record)}${tile(perGameP?'Saves / Game':'Saves',perGameP?rate(r.saves):viewCount(r.saves))}${tile(perGameP?'Shots Faced / Game':'Shots Faced',perGameP?rate(r.shotsAgainst):viewCount(r.shotsAgainst))}${tile('Goals Against',viewCount(r.goalsAgainst))}${tile('GA / Game',rate(r.goalsAgainst))}${tile('Shutouts',viewCount(r.shutouts))}${tile('GAA with verified ice time',covered(gaa?.toFixed(2),tracked.length))}${situations}</div><p class="small muted">GAA uses goals against per 60 minutes in games with verified ice time. Situational stats use only games with the required fields.</p>${gaaNote(r)}</section>`;
+}
 function vPlayers(){
   if(!selP||!P.find(p=>p.name===selP)) selP=[...P].sort((a,b)=>b.pts-a.pts)[0].name;
   const p=P.find(x=>x.name===selP),c=col(p.name),a=ART[p.idx%4];
@@ -759,7 +776,7 @@ function vPlayers(){
   if(playerSection==='trends')return h+leagueComparison(p)+playerAnalytics(p);
   if(playerSection==='stats')return h+playerRecords(p)+detailedPlayerStats(p);
   if(playerSection==='games')return h+detailedPlayerStats(p,true);
-  if(p.fullTimeGoalie||p.primary==='goalie'){const r=recordedRosterStats(p);h+=`<section class="card s4"><h2>Goaltending</h2><div class="stats">${tile('Goals Allowed',r.goalsAgainst??'Unavailable')}${tile('GA / Game',r.gaPerGame==null?'Unavailable':r.gaPerGame.toFixed(2))}</div>${gaaNote(r)}</section>`;}
+  if(p.fullTimeGoalie||p.primary==='goalie')h+=goalieSummary(p);
 
   const rep=scout(p.name); if(rep) h+=`<div class="card s4" style="padding-bottom:6px"><div class="h" style="margin-bottom:0">${coachHead('Scouting report · last session · '+esc(sessionLabel(lastSession())))}</div></div>`+scoutCard(rep,true);
   return h;
