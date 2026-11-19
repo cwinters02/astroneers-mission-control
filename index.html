@@ -428,6 +428,28 @@ function nightOverview(){
  const night=easternNight(),games=(M?.matches||[]).filter(m=>Number(m.gameType)===206&&matchNight(m)===night),f=form(games);
  return `<section class="card s4 accent" aria-label="Last night record"><div class="h"><h2>🌙 Last night · ${esc(night)}</h2><span class="pill">${games.length} verified 3v3 games</span></div>${games.length?`<div class="stats">${tile('Record',f.w+'–'+(f.l+f.o))}${tile('Goals for / against',f.gf+'–'+f.ga)}${tile('Shots for / against',f.sf+'–'+f.sa)}${tile('Overtime wins',games.filter(m=>result(m).w&&result(m).ot).length)}</div><details style="margin-top:16px"><summary>See all ${games.length} games & box scores</summary>${games.map(matchRow).join('')}</details>`:`<p>No verified games are recorded for ${esc(night)}. Older sessions remain in Games and are not labelled as last night.</p>`}</section>`;
 }
+function goalieVolumeBenchmark(){
+ // Ordinary ChelHead sample: 16 human goalie appearances across 10 clubs.
+ const base={appearances:16,saves:212,shots:284};
+ // Use anonymous counts for the verified Astroneers opponent box scores.
+ const opponents=new Map(Object.entries({
+   '4000462440230':[[10,18]],'4000262050429':[[6,13]],'3958389400398':[[5,10]],
+   '3958122140380':[[15,30]],'3954175920138':[[9,16]]
+ }));
+ const valid=([sv,sa])=>Number.isInteger(sv)&&Number.isInteger(sa)&&sa>0&&sv>=0&&sv<=sa;
+ for(const [id,rows] of Object.entries(M?.opponentGoalieBenchmark||{})){
+   if(Array.isArray(rows)&&rows.length&&rows.every(row=>Array.isArray(row)&&row.length===2&&valid(row)))opponents.set(id,rows);
+ }
+ for(const m of tracked3v3()){
+   const rows=(m.oppPlayers||[]).filter(p=>p[1]==='goalie'&&p[5]!=null&&p[6]!=null).map(p=>[Number(p[5]),Number(p[6])]).filter(valid);
+   if(rows.length&&!opponents.has(String(m.id)))opponents.set(String(m.id),rows);
+ }
+ const added=[...opponents.values()].flat();
+ const appearances=base.appearances+added.length;
+ const saves=base.saves+added.reduce((sum,[sv])=>sum+sv,0);
+ const shots=base.shots+added.reduce((sum,[,sa])=>sum+sa,0);
+ return {appearances,opponents:added.length,saves:saves/appearances,shots:shots/appearances,goals:(shots-saves)/appearances};
+}
 function leagueComparison(p){
  const b=M?.gradingBenchmarks,goalie=p.fullTimeGoalie||p.primary==='goalie';
  const scope=goalie?goalieLeagueScope:leagueScope;
@@ -439,11 +461,9 @@ function leagueComparison(p){
  const total=k=>rows.length&&rows.every(r=>r.x[k]!=null)?rows.reduce((s,r)=>s+n(r.x[k]),0):null;
  const ref=k=>rows.length&&rows.every(r=>b?.roles?.[role(r)]?.[k]!=null)?rows.reduce((s,r)=>s+b.roles[role(r)][k],0)/rows.length:null;
  let metrics=[];
+ const volume=goalie?goalieVolumeBenchmark():null;
  if(goalie){
    const ref=b?.verified===true?b.roles?.goalie:null;
-   // Ordinary ChelHead 3v3 match sample: 16 human goalie appearances across 10 clubs.
-   const appearances=16,saves=212,shots=284;
-   const ordinary={saves:saves/appearances,shots:shots/appearances,goals:(shots-saves)/appearances};
    const sample=(keys,calculate)=>{
      const known=rows.filter(({x})=>keys.every(k=>x[k]!=null&&Number.isFinite(Number(x[k]))));
      const sums=keys.map(k=>known.reduce((sum,{x})=>sum+n(x[k]),0));
@@ -456,11 +476,11 @@ function leagueComparison(p){
    metrics=[
      metric('Save percentage',['glsaves','glshots'],ratio,{average:ref?.savePct}),
      metric('Saves',['glsaves'],count),
-     metric('Saves / Game',['glsaves'],rate,{average:ordinary.saves}),
+     metric('Saves / Game',['glsaves'],rate,{average:volume.saves}),
      metric('Shots Faced',['glshots'],count),
-     metric('Shots Faced / Game',['glshots'],rate,{average:ordinary.shots}),
+     metric('Shots Faced / Game',['glshots'],rate,{average:volume.shots}),
      metric('Goals Against (GA)',['glga'],count,{lower:true}),
-     metric('Goals Against / Game',['glga'],rate,{average:ordinary.goals,lower:true}),
+     metric('Goals Against / Game',['glga'],rate,{average:volume.goals,lower:true}),
      metric('Goals Against Average (GAA)',['glga','toiseconds'],([ga,sec])=>sec>0?3600*ga/sec:null,{average:ref?.gaa,lower:true}),
      metric('Breakaway Saves',['glbrksaves'],count),
      metric('Breakaway Shots Faced',['glbrkshots'],count),
@@ -486,7 +506,7 @@ function leagueComparison(p){
    return `${amount} ${delta>0?'more':'fewer'} per game`;
  };
  const chart=(goalie?available:metrics).map(q=>{const ratio=q.average>0&&q.actual!=null?q.actual/q.average:null;return `<div class="league-row"><div class="h"><b>${q.label}${q.lower?' ↓ lower is better':''}</b><span class="small muted">${difference(q)}</span></div><div class="league-bar"><span>You · ${fmt(q.actual,q.percent)}</span><div class="league-track"><i style="width:${ratio==null?0:100*ratio/maxRatio}%;background:var(--ice)"></i></div></div><div class="league-bar"><span>${goalie&&!q.percent?'Sample avg':'3v3 avg'} · ${fmt(q.average,q.percent)}</span><div class="league-track"><i style="width:${q.average>0?100/maxRatio:0}%;background:var(--crimson)"></i></div></div></div>`}).join('');
- return `<section class="card s4" aria-label="Player vs average EASHL 3v3"><div class="h"><h2>📊 ${esc(dn(p.name))} vs average EASHL 3v3</h2><div class="chips" role="group" aria-label="Comparison sample"><button class="chip" data-league-scope="night" data-league-role="${goalie?'goalie':'skater'}" aria-pressed="${scope==='night'}">Last Night</button><button class="chip" data-league-scope="history" data-league-role="${goalie?'goalie':'skater'}" aria-pressed="${scope==='history'}">Tracked 3v3 history</button></div></div><p class="small">${scope==='night'?esc(sessionLabel(lastSession())):'All verified stored 3v3 games'} · ${rows.length} active ${goalie?'goalie':'skater'} appearances. ${goalie?'Human goalies only; skater games excluded.':'Per appearance; benchmark follows the actual position played.'}</p>${available.length?`<div class="league-chart" role="img" aria-label="Grouped bars comparing ${esc(dn(p.name))} with the average at the same 3v3 position. Exact values follow in a table.">${chart}</div>`:'<p>Not enough verified player or league data for this comparison.</p>'}<details style="margin-top:16px" ${goalie?'open':''}><summary>${goalie?'All goalie stats & league benchmarks':'Exact values & benchmark details'}</summary><div class="tscroll"><table><thead><tr><th>Metric</th><th>${esc(dn(p.name))}</th><th>${goalie?'3v3 benchmark':'3v3 role average'}</th>${goalie?'<th>Games with data</th>':'<th>Direction</th>'}</tr></thead><tbody>${metrics.map(q=>`<tr><td>${q.label}</td><td>${goalie&&q.actual==null?(q.count?'No attempts':'Not recorded'):fmt(q.actual,q.percent)}</td><td>${goalie&&q.average==null?'—':fmt(q.average,q.percent)}</td><td>${goalie?`${q.count} of ${rows.length}`:q.lower?'Lower is better':'Higher is better'}</td></tr>`).join('')}</tbody></table></div><p class="small muted">ChelHead tracked-population reference averages, verified ${esc(b?.checkedAt?.slice(0,10)||'date unavailable')}. Rounded model references, not a census of every EASHL player. Missing fields are excluded, never estimated. DNF appearances are not time-scaled without verified ice time. Career totals may include other modes, so this graph uses stored confirmed 3v3 games only. ${goalie?'Save percentage keeps the original ChelHead reference. The three per-game benchmarks use a separate sample of 16 human goalie appearances across 10 clubs from ordinary ChelHead 3v3 matches, excluding Astroneers and DNF games. These sources use different samples. A dash means no benchmark is available. GAA uses only games with verified ice time. Coverage shows how many games were included.':''}</p></details></section>`;
+ return `<section class="card s4" aria-label="Player vs average EASHL 3v3"><div class="h"><h2>📊 ${esc(dn(p.name))} vs average EASHL 3v3</h2><div class="chips" role="group" aria-label="Comparison sample"><button class="chip" data-league-scope="night" data-league-role="${goalie?'goalie':'skater'}" aria-pressed="${scope==='night'}">Last Night</button><button class="chip" data-league-scope="history" data-league-role="${goalie?'goalie':'skater'}" aria-pressed="${scope==='history'}">Tracked 3v3 history</button></div></div><p class="small">${scope==='night'?esc(sessionLabel(lastSession())):'All verified stored 3v3 games'} · ${rows.length} active ${goalie?'goalie':'skater'} appearances. ${goalie?'Human goalies only; skater games excluded.':'Per appearance; benchmark follows the actual position played.'}</p>${available.length?`<div class="league-chart" role="img" aria-label="Grouped bars comparing ${esc(dn(p.name))} with the average at the same 3v3 position. Exact values follow in a table.">${chart}</div>`:'<p>Not enough verified player or league data for this comparison.</p>'}<details style="margin-top:16px" ${goalie?'open':''}><summary>${goalie?'All goalie stats & league benchmarks':'Exact values & benchmark details'}</summary><div class="tscroll"><table><thead><tr><th>Metric</th><th>${esc(dn(p.name))}</th><th>${goalie?'3v3 benchmark':'3v3 role average'}</th>${goalie?'<th>Games with data</th>':'<th>Direction</th>'}</tr></thead><tbody>${metrics.map(q=>`<tr><td>${q.label}</td><td>${goalie&&q.actual==null?(q.count?'No attempts':'Not recorded'):fmt(q.actual,q.percent)}</td><td>${goalie&&q.average==null?'—':fmt(q.average,q.percent)}</td><td>${goalie?`${q.count} of ${rows.length}`:q.lower?'Lower is better':'Higher is better'}</td></tr>`).join('')}</tbody></table></div><p class="small muted">ChelHead tracked-population reference averages, verified ${esc(b?.checkedAt?.slice(0,10)||'date unavailable')}. Rounded model references, not a census of every EASHL player. Missing fields are excluded, never estimated. DNF appearances are not time-scaled without verified ice time. Career totals may include other modes, so this graph uses stored confirmed 3v3 games only. ${goalie?`Save percentage keeps the original ChelHead reference. Per-game benchmarks pool 16 non-Astroneers appearances with ${volume.opponents} verified Astroneers opponent appearances (${volume.appearances} total). Astroneers opponent DNF appearances may be included. A dash means no benchmark is available. GAA uses only games with verified ice time. Coverage shows how many games were included.`:''}</p></details></section>`;
 }
 
 function overviewCoachCard(r){
