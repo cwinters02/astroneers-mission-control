@@ -90,7 +90,7 @@
    },
    "_stats": [
     {
-     "name": "WINTRXS",
+     "name": "astroneer_moose",
      "position": "center",
      "verifiedStats": true,
      "partialStats": true,
@@ -104,7 +104,7 @@
      "skgiveaways": 16
     },
     {
-     "name": "TheCicc_WP",
+     "name": "astroneer_flappy",
      "position": "leftWing",
      "verifiedStats": true,
      "partialStats": true,
@@ -118,7 +118,7 @@
      "skgiveaways": 6
     },
     {
-     "name": "TheHoax_WP",
+     "name": "astroneer_gordy",
      "position": "defenseMen",
      "verifiedStats": true,
      "partialStats": true,
@@ -134,7 +134,7 @@
    ],
    "players": [
     [
-     "WINTRXS",
+     "astroneer_moose",
      "center",
      null,
      null,
@@ -192,7 +192,7 @@
      null
     ],
     [
-     "TheCicc_WP",
+     "astroneer_flappy",
      "leftWing",
      null,
      null,
@@ -250,7 +250,7 @@
      null
     ],
     [
-     "TheHoax_WP",
+     "astroneer_gordy",
      "defenseMen",
      null,
      null,
@@ -341,7 +341,7 @@
    },
    "_stats": [
     {
-     "name": "WINTRXS",
+     "name": "astroneer_moose",
      "position": "center",
      "verifiedStats": true,
      "partialStats": true,
@@ -355,7 +355,7 @@
      "skgiveaways": 7
     },
     {
-     "name": "TheCicc_WP",
+     "name": "astroneer_flappy",
      "position": "leftWing",
      "verifiedStats": true,
      "partialStats": true,
@@ -369,7 +369,7 @@
      "skgiveaways": 1
     },
     {
-     "name": "TheHoax_WP",
+     "name": "astroneer_gordy",
      "position": "defenseMen",
      "verifiedStats": true,
      "partialStats": true,
@@ -385,7 +385,7 @@
    ],
    "players": [
     [
-     "WINTRXS",
+     "astroneer_moose",
      "center",
      null,
      null,
@@ -443,7 +443,7 @@
      null
     ],
     [
-     "TheCicc_WP",
+     "astroneer_flappy",
      "leftWing",
      null,
      null,
@@ -501,7 +501,7 @@
      null
     ],
     [
-     "TheHoax_WP",
+     "astroneer_gordy",
      "defenseMen",
      null,
      null,
@@ -592,7 +592,7 @@
    },
    "_stats": [
     {
-     "name": "WINTRXS",
+     "name": "astroneer_moose",
      "position": "center",
      "verifiedStats": true,
      "partialStats": true,
@@ -606,7 +606,7 @@
      "skgiveaways": 10
     },
     {
-     "name": "TheCicc_WP",
+     "name": "astroneer_flappy",
      "position": "leftWing",
      "verifiedStats": true,
      "partialStats": true,
@@ -620,7 +620,7 @@
      "skgiveaways": 12
     },
     {
-     "name": "TheHoax_WP",
+     "name": "astroneer_gordy",
      "position": "defenseMen",
      "verifiedStats": true,
      "partialStats": true,
@@ -636,7 +636,7 @@
    ],
    "players": [
     [
-     "WINTRXS",
+     "astroneer_moose",
      "center",
      null,
      null,
@@ -694,7 +694,7 @@
      null
     ],
     [
-     "TheCicc_WP",
+     "astroneer_flappy",
      "leftWing",
      null,
      null,
@@ -752,7 +752,7 @@
      null
     ],
     [
-     "TheHoax_WP",
+     "astroneer_gordy",
      "defenseMen",
      null,
      null,
@@ -843,7 +843,7 @@
    },
    "_stats": [
     {
-     "name": "WINTRXS",
+     "name": "astroneer_moose",
      "position": "center",
      "verifiedStats": true,
      "partialStats": true,
@@ -857,7 +857,7 @@
      "skgiveaways": 19
     },
     {
-     "name": "TheCicc_WP",
+     "name": "astroneer_flappy",
      "position": "leftWing",
      "verifiedStats": true,
      "partialStats": true,
@@ -871,7 +871,7 @@
      "skgiveaways": 5
     },
     {
-     "name": "TheHoax_WP",
+     "name": "astroneer_gordy",
      "position": "defenseMen",
      "verifiedStats": true,
      "partialStats": true,
@@ -887,7 +887,7 @@
    ],
    "players": [
     [
-     "WINTRXS",
+     "astroneer_moose",
      "center",
      null,
      null,
@@ -945,7 +945,7 @@
      null
     ],
     [
-     "TheCicc_WP",
+     "astroneer_flappy",
      "leftWing",
      null,
      null,
@@ -1003,7 +1003,7 @@
      null
     ],
     [
-     "TheHoax_WP",
+     "astroneer_gordy",
      "defenseMen",
      null,
      null,
@@ -1094,7 +1094,7 @@
    },
    "_stats": [
     {
-     "name": "WINTRXS",
+     "name": "astroneer_moose",
      "position": "center",
      "verifiedStats": true,
      "partialStats": true,
@@ -1108,7 +1108,7 @@
      "skgiveaways": 14
     },
     {
-     "name": "TheCicc_WP",
+     "name": "astroneer_flappy",
      "position": "leftWing",
      "verifiedStats": true,
      "partialStats": true,
@@ -1122,7 +1122,7 @@
      "skgiveaways": 10
     },
     {
-     "name": "CDNFlyerfan",
+     "name": "Astroneers guest",
      "position": "defenseMen",
      "verifiedStats": true,
      "partialStats": true,
@@ -1138,7 +1138,7 @@
    ],
    "players": [
     [
-     "WINTRXS",
+     "astroneer_moose",
      "center",
      null,
      null,
@@ -1196,7 +1196,7 @@
      null
     ],
     [
-     "TheCicc_WP",
+     "astroneer_flappy",
      "leftWing",
      null,
      null,
@@ -1254,7 +1254,7 @@
      null
     ],
     [
-     "CDNFlyerfan",
+     "Astroneers guest",
      "defenseMen",
      null,
      null,
