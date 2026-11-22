@@ -251,6 +251,15 @@ td.best{color:var(--cream);font-weight:700}
 .pod .r i{font-style:normal;font-weight:700;color:var(--cream)}
 
 
+/* staff room */
+.sbadge{display:inline-grid;place-items:center;width:38px;height:38px;border-radius:50%;color:#0c1626;font-weight:800;font-size:13px;flex:none}
+.staffu{display:flex!important;gap:12px;align-items:flex-start;padding:12px 0;border-top:1px solid var(--line)}
+.staffu:first-of-type{border-top:0}.staffu p{margin:0;color:var(--body);line-height:1.5;font-size:13.5px}
+.stfgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px}
+.stf{display:flex;gap:10px;align-items:center;background:var(--chip);border-radius:14px;padding:10px 12px}
+.srow{display:grid;grid-template-columns:minmax(0,130px) minmax(0,1fr);gap:10px;padding:8px 0;border-top:1px solid var(--line);font-size:13px;line-height:1.45}
+.srow b{font-weight:700}.srow span{color:var(--body)}
+@media (max-width:560px){.srow{grid-template-columns:1fr;gap:2px}}
 /* collapsible sections */
 .fold>summary{display:flex;align-items:center;justify-content:space-between;gap:12px;cursor:pointer;list-style:none;font:700 17px/1.2 var(--fh,inherit);min-height:44px}
 .fold>summary::-webkit-details-marker{display:none}
@@ -499,6 +508,11 @@ function spark(vals){
 /* rink zones (EA's 16 shot-location buckets) */
 const ZNAME={1:'R corner',2:'Behind net',3:'L corner',4:'Crease',5:'Outside R',6:'L net side',7:'Low slot',8:'R net side',9:'Outside L',10:'High slot',11:'L circle',12:'R circle',13:'R point',14:'Center point',15:'L point',16:'Neutral zone'};
 const ZG={16:[8,8,324,34],15:[8,46,104,52],14:[116,46,108,52],13:[228,46,104,52],11:[8,102,104,56],10:[116,102,108,56],12:[228,102,104,56],9:[8,162,104,50],7:[116,162,108,50],5:[228,162,104,50],6:[8,216,104,46],4:[116,216,108,46],8:[228,216,104,46],3:[8,266,104,30],2:[116,266,108,30],1:[228,266,104,30]};
+const HEAT=[[0,[58,110,216]],[.3,[53,190,170]],[.55,[242,213,68]],[.78,[240,118,44]],[1,[215,31,43]]];
+function heatCol(a){a=Math.max(0,Math.min(1,a));for(let i=1;i<HEAT.length;i++){if(a<=HEAT[i][0]){const [t0,c0]=HEAT[i-1],[t1,c1]=HEAT[i],u=(a-t0)/(t1-t0||1);return 'rgb('+c0.map((v,j)=>Math.round(v+(c1[j]-v)*u)).join(',')+')'}}return 'rgb(215,31,43)'}
+const heatSq=a=>Math.sqrt(Math.max(0,Math.min(1,a)));
+const heatOp=a=>a<=0?0:(.35+Math.min(1,a)*.55);
+const heatLegend=(x,y,w)=>`<g><defs><linearGradient id="hl${x}${y}" x1="0" x2="1">${HEAT.map(([t,c])=>`<stop offset="${t}" stop-color="rgb(${c})"/>`).join('')}</linearGradient></defs><rect x="${x}" y="${y}" width="${w}" height="7" rx="3.5" fill="url(#hl${x}${y})" stroke="#7d93ab" stroke-opacity=".5"/><text x="${x}" y="${y+16}" font-size="8" fill="#26405c" font-weight="700">fewer</text><text x="${x+w}" y="${y+16}" text-anchor="end" font-size="8" fill="#26405c" font-weight="700">more</text></g>`;
 function zoneMap(shots,goals,mode){
   const sh=k=>n(shots[k]),gl=k=>n(goals[k]);
   const val=k=>mode==='goals'?gl(k):mode==='pct'?(sh(k)>=8?gl(k)/sh(k)*100:0):sh(k);
@@ -521,14 +535,16 @@ function zoneMap(shots,goals,mode){
     <path d="M148 266h44v12a4 4 0 0 1-4 4h-36a4 4 0 0 1-4-4z" fill="#f5f6f7" stroke="${RED}" stroke-width="3"/>
     <circle cx="170" cy="232" r="2.5" fill="${RED}" stroke="none" opacity=".6"/>
    </g>`;
-  let s='';
+  let heat='',s='';
   keys.forEach(k=>{const g=ZG[k],v=val(k),a=v/mx;
     const txt=mode==='pct'?(sh(k)>=8?f1(v)+'%':'–'):f0(v);
     const cx=g[0]+g[2]/2,cy=g[1]+g[3]/2,small=g[3]<40;
-    s+=`<g><title>${ZNAME[k]}: ${f0(sh(k))} shots, ${f0(gl(k))} goals${sh(k)?' ('+f1(gl(k)/sh(k)*100)+'%)':''}</title><rect x="${g[0]}" y="${g[1]}" width="${g[2]}" height="${g[3]}" rx="9" fill="${RED}" fill-opacity="${(.04+a*.62).toFixed(2)}" stroke="#7d93ab" stroke-opacity=".45" stroke-dasharray="3 3"/>
+    const h_=heatSq(a);heat+=`<rect x="${g[0]+4}" y="${g[1]+4}" width="${g[2]-8}" height="${g[3]-8}" rx="14" fill="${heatCol(h_)}" fill-opacity="${heatOp(h_).toFixed(2)}"/>`;
+    s+=`<g><title>${ZNAME[k]}: ${f0(sh(k))} shots, ${f0(gl(k))} goals${sh(k)?' ('+f1(gl(k)/sh(k)*100)+'%)':''}</title><rect x="${g[0]}" y="${g[1]}" width="${g[2]}" height="${g[3]}" fill="transparent"/>
     <text x="${cx}" y="${cy-1}" text-anchor="middle" font-size="${small?11:15}" font-weight="800" fill="#0b1a2e" stroke="#f3f8fc" stroke-width="3" paint-order="stroke">${txt}</text>
     <text x="${cx}" y="${cy+(small?10:13)}" text-anchor="middle" font-size="8.5" font-weight="600" fill="#26405c" stroke="#f3f8fc" stroke-width="2.5" paint-order="stroke">${ZNAME[k]}</text></g>`});
-  return `<svg class="zmap" viewBox="0 0 340 304" role="img" aria-label="Shot location map drawn on an ice rink, attacking zone">${r}${s}</svg>`;
+  r+=`<defs><filter id="hb" x="-10%" y="-10%" width="120%" height="120%"><feGaussianBlur stdDeviation="10"/></filter></defs><g clip-path="url(#rk)" filter="url(#hb)">${heat}</g>`;
+  return `<svg class="zmap" viewBox="0 0 340 304" role="img" aria-label="Shot location heat map drawn on an ice rink, attacking zone">${r}${s}</svg><div class="legend" style="justify-content:center;margin-top:8px"><span>Fewer</span><i style="width:120px;height:8px;border-radius:4px;background:linear-gradient(90deg,${HEAT.map(([t,c])=>'rgb('+c+') '+t*100+'%').join(',')})"></i><span>More</span></div>`;
 }
 function netMap(shots,goals){
   const sh=k=>n(shots[k]),gl=k=>n(goals[k]);
@@ -543,10 +559,12 @@ function netMap(shots,goals){
    <path d="M12 4H228V128H12z" fill="url(#mesh)"/>
    <path d="M12 4L28 12H212L228 4" fill="none" stroke="#9db3ca" stroke-width="1.2" opacity=".7"/>
    <path d="M28 12V128M212 12V128" stroke="#9db3ca" stroke-width="1" opacity=".5"/>`;
-  let s=Object.keys(Z).map(k=>{const z=Z[k],a=sh(k)/mx,top=k<3;
-    return `<g><title>${z[4]}: ${f0(sh(k))} shots, ${f0(gl(k))} goals</title><rect x="${z[0]}" y="${z[1]}" width="${z[2]}" height="${z[3]}" fill="${RED}" fill-opacity="${(.06+a*.62).toFixed(2)}" stroke="#cfe0f2" stroke-opacity=".35" stroke-dasharray="3 3"/><text x="${z[0]+z[2]/2}" y="${z[1]+(top?26:18)}" text-anchor="middle" font-size="16" font-weight="800" fill="#fff" stroke="#0b1a2e" stroke-width="3" paint-order="stroke">${f0(sh(k))}</text><text x="${z[0]+z[2]/2}" y="${z[1]+(top?39:30)}" text-anchor="middle" font-size="8.5" font-weight="600" fill="#e9f1f8" stroke="#0b1a2e" stroke-width="2.5" paint-order="stroke">${z[4]} · ${pc(k)}</text></g>`}).join('');
-  const a5=sh(5)/mx;
-  s+=`<g><title>Five hole: ${f0(sh(5))} shots, ${f0(gl(5))} goals (${pc(5)})</title><rect x="98" y="99" width="44" height="25" rx="8" fill="${RED}" fill-opacity="${(.18+a5*.62).toFixed(2)}" stroke="#fff" stroke-opacity=".75" stroke-width="1.3"/><text x="120" y="111" text-anchor="middle" font-size="13" font-weight="800" fill="#fff" stroke="#0b1a2e" stroke-width="3" paint-order="stroke">${f0(sh(5))}</text><text x="120" y="121" text-anchor="middle" font-size="7.5" font-weight="600" fill="#e9f1f8" stroke="#0b1a2e" stroke-width="2.5" paint-order="stroke">Five hole</text></g>`;
+  let heat=Object.keys(Z).map(k=>{const z=Z[k],a=sh(k)/mx;return `<rect x="${z[0]+6}" y="${z[1]+6}" width="${z[2]-12}" height="${z[3]-12}" rx="12" fill="${heatCol(a)}" fill-opacity="${heatOp(a).toFixed(2)}"/>`}).join('');
+  const a5=sh(5)/mx;heat+=`<rect x="100" y="101" width="40" height="21" rx="9" fill="${heatCol(a5)}" fill-opacity="${heatOp(a5).toFixed(2)}"/>`;
+  d+=`<defs><filter id="hbn" x="-10%" y="-10%" width="120%" height="120%"><feGaussianBlur stdDeviation="7"/></filter><clipPath id="nclip"><rect x="12" y="4" width="216" height="124"/></clipPath></defs><g clip-path="url(#nclip)" filter="url(#hbn)">${heat}</g>`;
+  let s=Object.keys(Z).map(k=>{const z=Z[k],top=k<3;
+    return `<g><title>${z[4]}: ${f0(sh(k))} shots, ${f0(gl(k))} goals</title><text x="${z[0]+z[2]/2}" y="${z[1]+(top?26:18)}" text-anchor="middle" font-size="16" font-weight="800" fill="#fff" stroke="#0b1a2e" stroke-width="3" paint-order="stroke">${f0(sh(k))}</text><text x="${z[0]+z[2]/2}" y="${z[1]+(top?39:30)}" text-anchor="middle" font-size="8.5" font-weight="600" fill="#e9f1f8" stroke="#0b1a2e" stroke-width="2.5" paint-order="stroke">${z[4]} · ${pc(k)}</text></g>`}).join('');
+  s+=`<g><title>Five hole: ${f0(sh(5))} shots, ${f0(gl(5))} goals (${pc(5)})</title><rect x="98" y="99" width="44" height="25" rx="8" fill="none" stroke="#fff" stroke-opacity=".7" stroke-width="1.3"/><text x="120" y="111" text-anchor="middle" font-size="13" font-weight="800" fill="#fff" stroke="#0b1a2e" stroke-width="3" paint-order="stroke">${f0(sh(5))}</text><text x="120" y="121" text-anchor="middle" font-size="7.5" font-weight="600" fill="#e9f1f8" stroke="#0b1a2e" stroke-width="2.5" paint-order="stroke">Five hole</text></g>`;
   const frame=`<path d="M12 128V6a2 2 0 0 1 2-2H226a2 2 0 0 1 2 2V128" fill="none" stroke="${RED}" stroke-width="6" stroke-linejoin="round"/><path d="M9 128h6M225 128h6" stroke="#fff" stroke-width="4"/>`;
   return `<svg class="zmap" style="max-width:340px" viewBox="0 0 240 166" role="img" aria-label="Shots by spot on the net, drawn as a hockey goal">${d}${s}${frame}</svg>`;
 }
@@ -689,7 +707,7 @@ function vHome(){
   const s0=SESS[0];
   if(!s0)return '<div class="card"><div class="empty">No tracked games yet.</div></div>';
   const L=slabel(s0),t=tally(s0.games);
-  const rep=R&&R.reports&&R.reports[0];
+  const rep=withAutoReports()[0];
   const last10=MS.slice(0,10),t10=tally(last10),c=last10.length||1,pct=t10.w/c*100,ordered=[...last10].reverse();
   const cs=D.clubStats||{};
   const hero=`<section class="card accent" id="cRes" aria-label="Last night"><div class="h"><span class="eyebrow">${esc(L.title)}</span><span class="small">${esc(L.sub)}</span></div>
@@ -712,7 +730,7 @@ function vHome(){
 /* ---------- COACH tab ---------- */
 let repSel=0;
 function vCoach(){
-  const reps=(R&&R.reports)||[];
+  const reps=withAutoReports();
   const rep=reps[repSel]||reps[0];
   const p=rep?parseReport(rep.summary):null;
   const sel=reps.length>1?`<div class="chips" role="group" aria-label="Choose a report">${reps.map((r,i)=>`<button class="chip" data-rep="${i}" aria-pressed="${i===repSel}">${esc(shortDay(r.night))}</button>`).join('')}</div>`:'';
@@ -949,7 +967,7 @@ const letter=s=>s>=90?'A':s>=80?'B':s>=70?'C':s>=60?'D':'F';
 function skaterSignal(items){
   if(!items.length)return null;
   const T={a:0,e:0,ta:0,eta:0,gv:0,egv:0,bl:0,ebl:0,g:0,as:0};
-  items.forEach(({r,b})=>{T.a+=4*n(r.skgoals)+3*n(r.skassists);T.e+=4*b.goals+3*b.assists;
+  items.forEach(it=>{const {r,b}=it;T.a+=4*n(r.skgoals)+3*n(r.skassists);T.e+=(4*b.goals+3*b.assists)*(it.f||1);
     T.ta+=n(r.sktakeaways);T.eta+=b.takeaways;T.gv+=n(r.skgiveaways);T.egv+=b.giveaways;T.bl+=n(r.skbs);T.ebl+=b.blocks});
   const rel=(x,e)=>e>0?clamp((x-e)/e/.60,-1,1):null;
   const sc=rel(T.a,T.e),ta=rel(T.ta,T.eta);
@@ -963,13 +981,14 @@ function skaterSignal(items){
   return s/w;
 }
 function computeGrades(){
+  const rowF=new Map();
   const B=(M.gradingBenchmarks&&M.gradingBenchmarks.roles)||{};
   const nights=[...SESS].filter(s=>/^\d{4}/.test(s.key)).sort((a,b)=>a.key<b.key?-1:1);
   const out=[];const hist={};P.forEach(p=>hist[p.key]=[]);
   nights.forEach(s=>{
     const res={night:s.key,rows:{}};
     const byP={};P.forEach(p=>byP[p.key]=[]);
-    s.games.forEach(g=>g.rows.forEach(r=>{if(byP[r.name])byP[r.name].push(r)}));
+    s.games.forEach(g=>{const cf=gameCtx(g).f;g.rows.forEach(r=>{if(byP[r.name]){byP[r.name].push(r);rowF.set(r,cf)}})});
     P.forEach(p=>{
       const rows=byP[p.key];
       if(p.isG){
@@ -984,7 +1003,7 @@ function computeGrades(){
       }
       const act=rows.filter(r=>r.position!=='goalie'&&isActive(r));
       if(!act.length)return;
-      const lg=act.map(r=>({r,b:B[rkey(r.position)],role:rkey(r.position)})).filter(x=>x.b);
+      const lg=act.map(r=>({r,b:B[rkey(r.position)],role:rkey(r.position),f:rowF.get(r)||1})).filter(x=>x.b);
       const league=skaterSignal(lg);
       if(league==null)return;
       /* personal: strictly earlier nights */
@@ -1006,6 +1025,185 @@ function computeGrades(){
   return out;
 }
 window.AST={computeGrades:()=>computeGrades()};
+
+/* ---------- GAME CONTEXT (3v3 mode, human vs AI goalie, opponent tier) ---------- */
+const CTX={aiGoalie:1.10,perDivision:.03,cap:.15}; /* assumptions, kept in one place so they are easy to tune */
+function gameCtx(g){
+  const c=g.m.oppContext;if(!c)return {goalie:'unknown',gap:null,f:1};
+  const gap=(c.oppDivision!=null&&c.ourDivision!=null)?c.oppDivision-c.ourDivision:null;
+  const q=gap==null?0:clamp(CTX.perDivision*clamp(gap,-5,5),-CTX.cap,CTX.cap);
+  return {goalie:c.goalie,gap,f:(c.goalie==='ai'?CTX.aiGoalie:1)*(1+q)};
+}
+function ctxTally(){
+  const o={human:{g:0,s:0,n:0,w:0},ai:{g:0,s:0,n:0,w:0},unknown:{n:0}};
+  MS.forEach(g=>{const c=gameCtx(g);const b=o[c.goalie]||o.unknown;b.n=(b.n||0)+1;if(c.goalie!=='unknown'){b.g+=g.us;b.s+=g.sf;if(g.res.w)b.w++}});
+  return o;
+}
+const STAFF={
+  head:{name:'Coach Finklestein',title:'Head coach',ini:'CF',col:'#d8737c'},
+  off:{name:'Sparks Dunleavy',title:'Offensive coordinator',ini:'SD',col:'#63a6dd'},
+  def:{name:'Bruno Kowalczyk',title:'Defensive coach',ini:'BK',col:'#ec443d'},
+  gol:{name:'Yves Beaulieu',title:'Goalie coach',ini:'YB',col:'#eae6ca'},
+  pos:{name:'Mo Teller',title:'Possession analyst',ini:'MT',col:'#9fcdf0'},
+  dat:{name:'Dr. Priya Raman',title:'Data analyst',ini:'PR',col:'#b59cf0'},
+  chem:{name:'Dana Whitfield',title:'Lines and chemistry analyst',ini:'DW',col:'#63c6a6'},
+  scout:{name:'Skip Okafor',title:'Opponent scout',ini:'SO',col:'#f0b25a'}
+};
+const GROUP_STAFF={'Scoring':'off','Shooting':'off','Playmaking and possession':'pos','Faceoffs':'pos','Defense and puck care':'def','Discipline':'def','Goaltending':'gol','Special saves':'gol'};
+const ROWF={'Goals':'skgoals','Assists':'skassists','Shots on goal':'skshots','Hits':'skhits','Blocked shots':'skbs','Takeaways':'sktakeaways','Giveaways':'skgiveaways','Penalty minutes':'skpim'};
+const BKEY={'Goals':'goals','Assists':'assists','Takeaways':'takeaways','Giveaways':'giveaways','Blocked shots':'blocks'};
+const rowsOf=p=>((LOG[p.key]||{}).sk||[]).filter(x=>isActive(x.r));
+function perApp(p,field){const rs=rowsOf(p);return rs.length>=3?{v:rs.reduce((a,x)=>a+n(x.r[field]),0)/rs.length,n:rs.length}:null}
+const benchOf=(p,k)=>{const B=(M.gradingBenchmarks&&M.gradingBenchmarks.roles)||{};return B[p.bench]?B[p.bench][k]:null};
+const pick=(a,i)=>a[Math.abs(i)%a.length];
+function metricTake(sk,m,peers,idx){
+  const ent=peers.map(p=>({p,v:m.get(p)})).filter(x=>Number.isFinite(x.v));
+  if(!ent.length)return null;
+  if(ent.every(x=>x.v===0))return `Nobody has anything on the board for ${m.label.toLowerCase()} yet.`;
+  ent.sort((a,b)=>m.lower?a.v-b.v:b.v-a.v);
+  const A=ent[0],Z=ent[ent.length-1],fv=v=>fmtV(m.type,v);
+  let t;
+  if(ent.length===1){t=`${A.p.nick} sits at ${fv(A.v)}.`}
+  else if(A.v===Z.v){t=`Dead even across the room at ${fv(A.v)}.`}
+  else{
+    const s={off:[`${A.p.nick} leads the room at ${fv(A.v)}; ${Z.p.nick} trails at ${fv(Z.v)}.`,`Top mark goes to ${A.p.nick} (${fv(A.v)}). Bottom is ${Z.p.nick} (${fv(Z.v)}).`],
+      def:[`${m.lower?'Cleanest':'Best'} here is ${A.p.nick} at ${fv(A.v)}. ${Z.p.nick} is the one to coach up at ${fv(Z.v)}.`,`${A.p.nick} ${m.lower?'keeps it tidy':'does the work'} at ${fv(A.v)}; ${Z.p.nick} sits at ${fv(Z.v)}.`],
+      pos:[`${A.p.nick} sets the pace at ${fv(A.v)}, ${Z.p.nick} brings up the rear at ${fv(Z.v)}.`,`Ranking has ${A.p.nick} first (${fv(A.v)}) and ${Z.p.nick} last (${fv(Z.v)}).`],
+      gol:[`${A.p.nick}: ${fv(A.v)}.`],dat:[`${A.p.nick} ${fv(A.v)}, ${Z.p.nick} ${fv(Z.v)}.`]}[sk]||[`${A.p.nick} ${fv(A.v)}.`];
+    t=pick(s,idx);
+  }
+  /* 3v3 context: compare the leader's tracked-3v3 pace to the 3v3 league average for his role */
+  const f=ROWF[m.label],bk=BKEY[m.label];
+  if(f&&bk&&!A.p.isG){const pa=perApp(A.p,f),b=benchOf(A.p,bk);
+    if(pa&&b){const d=(pa.v-b)/b;t+=` In tracked 3v3 games ${A.p.nick} runs ${f1(pa.v)} a game against a 3v3 ${A.p.bench} average of ${f1(b)} (${d>=0?'+':''}${Math.round(d*100)}%).`}}
+  if(/Save %/.test(m.label)&&A.p.isG){const diff=A.v/100-.704;t+=` The human 3v3 goalie average is 70.4%, so that is ${diff>=0?'above':'below'} par by ${f1(Math.abs(diff)*100)} points.`}
+  return t;
+}
+function staffEveryStat(){
+  const out={};
+  const add=(k,group,peers,cat)=>{(out[k]=out[k]||[]).push({group,items:cat.map((m,i)=>({label:m.label,text:metricTake(k,m,peers,i)})).filter(x=>x.text)})};
+  SKG.forEach(([g,cat])=>{const k=GROUP_STAFF[g]||'dat';add(k,g,SK,cat)});
+  GLG.forEach(([g,cat])=>{const k=GROUP_STAFF[g]||'gol';add(k,g,GK,cat)});
+  return out;
+}
+function latestNight(){return SESS.find(s=>/^\d{4}/.test(s.key))}
+function nightRows(s){const o={};P.forEach(p=>o[p.key]=[]);s.games.forEach(g=>g.rows.forEach(r=>{if(o[r.name])o[r.name].push(r)}));return o}
+function staffUpdates(){
+  const s=latestNight();if(!s)return [];
+  const out=[],T=tally(s.games),all=tally(MS),NR=nightRows(s),C=ctxTally();
+  const add=(k,title,body,tag)=>out.push({k,title,body,tag});
+  const lbl=slabel(s).title;
+  const sk=P.filter(p=>!p.isG);
+  const sum=(f)=>sk.reduce((a,p)=>a+NR[p.key].filter(r=>r.position!=='goalie').reduce((x,r)=>x+n(r[f]),0),0);
+  const nGames=s.games.length,human=s.games.filter(g=>gameCtx(g).goalie==='human').length,ai=s.games.filter(g=>gameCtx(g).goalie==='ai').length;
+  const ctxLine=ai||human?` We saw ${human} human and ${ai} AI goalie${ai===1?'':'s'} across the night.`:' Opposing goalie type is not recorded for these games.';
+  /* offense */
+  const gF=T.gf,sF=T.sf,pct=sF?gF/sF*100:null,pctAll=all.sf?all.gf/all.sf*100:null;
+  add('off',`${lbl}: ${gF} goals on ${sF} shots`,`${pct!=null?`That is ${f1(pct)}% shooting against ${f1(pctAll)}% across tracked games.`:'Shot counts were not recorded.'} ${nGames<4?'Small sample, so do not overreact.':''}${ctxLine}${ai?' Goals on an AI goalie get a small discount in the grades, see the data analyst for why that is only an assumption.':''}`,lbl);
+  /* defense */
+  const gv=sum('skgiveaways'),tk=sum('sktakeaways');
+  if(gv||tk)add('def',`Puck care: ${tk} takeaways to ${gv} giveaways`,`${tk>=gv?'Good, we took more than we gave.':'We gave it away more than we took it.'} Season ratio is ${f2(all.n?SK.reduce((a,p)=>a+p.tk,0)/Math.max(1,SK.reduce((a,p)=>a+p.gv,0)):0)} takeaways per giveaway (club totals, all modes). 3v3 has fewer bodies to cover for a bad pass, so every giveaway here costs more than in 6v6.`);
+  /* goalie */
+  const gk=GK[0];if(gk){const gr=NR[gk.key].filter(r=>r.position==='goalie'&&n(r.glshots)>0);
+    if(gr.length){const sh=gr.reduce((a,r)=>a+n(r.glshots),0),sv=gr.reduce((a,r)=>a+n(r.glsaves),0),sp=sv/sh*100;
+      add('gol',`${gk.nick}: ${sv} saves on ${sh} shots (${f1(sp)}%)`,`${sp>=70.4?'At or above':'Below'} the human 3v3 goalie average of 70.4%. His season mark is ${f1(gk.svp)}%. ${sh<20?'Under 20 shots is a thin sample.':''}`)}
+    else add('gol',`${gk.nick} did not record a game`,'No goalie line this night, so there is nothing to grade. If he is out, someone has to be named in net before puck drop.')}
+  /* possession */
+  add('pos',`Shot share: ${T.sf}-${T.sa}`,`${T.sf+T.sa?Math.round(T.sf/(T.sf+T.sa)*100):0}% of shots were ours (season ${all.sf+all.sa?Math.round(all.sf/(all.sf+all.sa)*100):0}%). ${T.sf>=T.sa?'We had the puck more than they did.':'They out-shot us, which usually means we gave them the puck.'}`);
+  /* data analyst: honest context */
+  const hu=C.human,aiC=C.ai;
+  add('dat','Context check on the numbers',`Tracked games with a recorded goalie type: ${hu.n+aiC.n} of ${MS.length}. Our shooting is ${hu.s?f1(hu.g/hu.s*100)+'% vs human goalies ('+hu.n+' games)':'untested vs human goalies'}${aiC.s?' and '+f1(aiC.g/aiC.s*100)+'% vs AI goalies ('+aiC.n+' games)':''}. ${(aiC.s&&hu.s&&aiC.g/aiC.s<hu.g/hu.s)?' That is the opposite of what you would expect, but '+aiC.n+' games is noise, not a trend.':''} ${(aiC.n<4)?'The AI sample is too small to prove an AI goalie is easier, so the grading uses a small, openly assumed '+Math.round((CTX.aiGoalie-1)*100)+'% bump to expected scoring until we have more.':''}`);
+  /* chemistry */
+  const names=P.filter(p=>NR[p.key].some(r=>isActive(r)||n(r.glshots)>0)).map(p=>p.nick);
+  add('chem',`Who dressed: ${names.join(', ')||'unknown'}`,`${names.length<P.length?'Not everyone has a recorded line this night ('+P.filter(p=>!names.includes(p.nick)).map(p=>p.nick).join(', ')+'), so lineup ratings for these games are incomplete.':'Full roster recorded.'}`);
+  /* scout */
+  const opps=[...new Set(s.games.map(g=>g.opp))];
+  add('scout',`Opponents: ${opps.join(', ')}`,s.games.map(g=>{const c=gameCtx(g);return `${g.res.code} ${g.us}-${g.th} vs ${g.opp}${c.goalie==='ai'?' (AI goalie)':c.goalie==='human'?' (human goalie)':''}${c.gap!=null?(c.gap>1?', weaker division':c.gap<-1?', stronger division':', similar division'):''}`}).join('. ')+'.');
+  return out;
+}
+function staffBadge(k){const s=STAFF[k];return `<span class="sbadge" style="background:${s.col}">${s.ini}</span>`}
+function vStaff(){
+  const ups=staffUpdates(),every=staffEveryStat(),s=latestNight();
+  const feed=ups.map(u=>{const S_=STAFF[u.k];return `<div class="staffu"><div>${staffBadge(u.k)}</div><div><b>${esc(S_.name)} <span class="small muted">· ${esc(S_.title)}</span></b><div style="font-weight:700;margin:2px 0">${esc(u.title)}</div><p>${esc(u.body)}</p></div></div>`}).join('');
+  const sections=Object.keys(STAFF).filter(k=>every[k]).map(k=>{const S_=STAFF[k];const total=every[k].reduce((a,g)=>a+g.items.length,0);
+    return `<section class="card s4"><details class="fold"><summary><span style="display:flex;align-items:center;gap:10px">${staffBadge(k)}<span>${esc(S_.name)}<span class="small muted" style="display:block;font-weight:400">${esc(S_.title)}</span></span></span><span class="pill">${total} stats</span></summary>
+     <div style="margin-top:12px">${every[k].map(g=>`<div class="eyebrow" style="margin:14px 0 6px">${esc(g.group)}</div>${g.items.map(i=>`<div class="srow"><b>${esc(i.label)}</b><span>${esc(i.text)}</span></div>`).join('')}`).join('')}</div></details></section>`}).join('');
+  const roster=Object.keys(STAFF).map(k=>`<div class="stf">${staffBadge(k)}<div><b>${esc(STAFF[k].name)}</b><div class="small muted">${esc(STAFF[k].title)}</div></div></div>`).join('');
+  const C=ctxTally();
+  const method=`<section class="card s4"><details class="fold"><summary><span>How the staff reads the numbers</span><span class="pill o">3v3 aware</span></summary><div class="small" style="line-height:1.6;color:var(--body);margin-top:12px"><p style="margin:0 0 8px"><b>3v3, not 6v6.</b> Per-game comparisons use ChelHead's 3v3 averages for each role (a center scores about 1.6 goals a game in this mode). Three skaters a side means more space, more shots and more goals than 6v6, so a raw point total says little on its own. Club-report career totals can include other game modes, and the staff says so where it uses them.</p><p style="margin:0 0 8px"><b>Human or AI goalie.</b> Each game is tagged by the opposing goalie. A club with only three skaters and no goalie line was playing with an AI goalie. Right now ${C.human.n} games are tagged human and ${C.ai.n} AI, and ${C.unknown.n} older games are untagged because they fell out of ChelHead's recent-games window. Against an AI goalie the grading raises the expected scoring by ${Math.round((CTX.aiGoalie-1)*100)}% before giving credit. That number is an assumption, not a finding. The data analyst shows the real shooting split as the sample grows.</p><p style="margin:0"><b>Opponent quality.</b> Where the game feed gives both clubs' divisions, expected scoring moves ${Math.round(CTX.perDivision*100)}% per division of gap, capped at ${Math.round(CTX.cap*100)}%, so beating a stronger club earns a little more and running up the score on a weaker one a little less. Untagged games get no adjustment.</p></div></details></section>`;
+  return `<div class="grid">
+   <section class="card s4"><div class="h"><h2>Staff room</h2><span class="pill i">${s?esc(slabel(s).title):''}</span></div><p class="small muted" style="margin:0 0 12px">Updates are written from the newest games and refresh whenever new stats land.</p><div class="stfgrid">${roster}</div></section>
+   <section class="card s4"><div class="h"><h2>Latest updates</h2><span class="pill">${s?esc(fmtDay(s.key,true)):''}</span></div>${feed||'<div class="empty">No recorded night yet.</div>'}</section>
+   ${method}${sections}</div>`;
+}
+
+/* ---------- COACH FINKLESTEIN report builder (same format the Coach tab already reads) ---------- */
+function overallAt(p,night){
+  if(p.isG){let sh=0,sv=0,c=0;SESS.forEach(s=>{if(!/^\d{4}/.test(s.key)||s.key>night)return;s.games.forEach(g=>g.rows.forEach(r=>{if(r.name===p.key&&r.position==='goalie'&&n(r.glshots)>0){sh+=n(r.glshots);sv+=n(r.glsaves);c++}}))});
+    if(c<3||!sh)return null;return clamp(Math.round(70+25*clamp((sv/sh-.704)/.12,-1,1)),25,99)}
+  const B=(M.gradingBenchmarks&&M.gradingBenchmarks.roles)||{};const items=[];
+  SESS.forEach(s=>{if(!/^\d{4}/.test(s.key)||s.key>night)return;s.games.forEach(g=>{const f=gameCtx(g).f;g.rows.forEach(r=>{if(r.name===p.key&&r.position!=='goalie'&&isActive(r)&&B[rkey(r.position)])items.push({r,b:B[rkey(r.position)],role:rkey(r.position),f})})})});
+  if(items.length<3)return null;const sg=skaterSignal(items);return sg==null?null:clamp(Math.round(70+25*sg),25,99);
+}
+const hash=s=>[...String(s)].reduce((a,c)=>(a*31+c.charCodeAt(0))>>>0,7);
+function buildReport(night){
+  const s=SESS.find(x=>x.key===night);if(!s)return null;
+  const G=computeGrades().find(x=>x.night===night);if(!G)return null;
+  const T=tally(s.games),NR=nightRows(s),h=hash(night);
+  const rec=`${T.w}–${T.l+T.o}`;const gd=T.gf-T.ga;
+  const day=fmtDay(night,true).split(',').slice(-1)[0].trim().replace(/^\w+ /,m=>m).toUpperCase();
+  const mon=new Date(night+'T12:00:00').toLocaleString('en-US',{month:'long',day:'numeric'}).toUpperCase();
+  const wins=s.games.filter(g=>g.res.w),loss=s.games.filter(g=>!g.res.w);
+  const dnfs=s.games.filter(g=>g.m.dnf);
+  const ai=s.games.filter(g=>gameCtx(g).goalie==='ai').length;
+  const head=T.w>T.l+T.o?`Astroneers take ${T.w} of ${s.games.length} games; Finklestein wants the turnovers gone`:T.w===T.l+T.o?`Astroneers split the night; Finklestein sees a team that can play better`:`Astroneers stumble through ${['zero','one','two','three','four','five','six','seven','eight','nine'][s.games.length]||s.games.length} games; Finklestein calls for a reset`;
+  const gl=s.games.map(g=>`${g.res.code==='W'||g.res.w?'W':g.res.ot?'OTL':'L'} ${g.us}–${g.th}${g.m.dnf?', DNF':''} vs. ${g.opp}`);
+  const ctxs=s.games.map(g=>gameCtx(g));
+  const ctxTxt=ctxs.some(c=>c.goalie!=='unknown')?` Opposing goalies: ${ctxs.filter(c=>c.goalie==='human').length} human, ${ai} AI.`:'';
+  const sumry=`The Astroneers went ${rec} with ${T.gf} goals for and ${T.ga} against on ${T.sf} shots to ${T.sa}.${dnfs.length?` ${dnfs.length} of the ${s.games.length} games ended in a DNF, so ${dnfs.length>1?'those results are':'that result is'} real but the minutes are not.`:''}${ctxTxt}`;
+  const cards=[];const grades=[];
+  const EM={astroneer_moose:'🫎',astroneer_flappy:'🐦',astroneer_gordy:'💪',astroneer_gumbo:'🥅'};
+  P.forEach(p=>{
+    const g=G.rows[p.key];const rows=NR[p.key];
+    if(!g){ if(!rows.some(r=>isActive(r)||n(r.glshots)>0)){cards.push(`${EM[p.key]||'🏒'} ${p.nick} · Night Grade N/A · Astroneers Overall ${overallAt(p,night)??'N/A'}\nNo recorded appearance this night, so there is no grade to hand out.\nNext skate: If you are out, tell the group before the first puck drop so we can set the lineup.`)}return}
+    const ov=overallAt(p,night);const head=`${EM[p.key]||'🏒'} ${p.nick} · Night Grade ${g.grade} · Astroneers Overall ${ov??'N/A'}`;
+    if(p.isG){const gr=rows.filter(r=>r.position==='goalie'&&n(r.glshots)>0);const sh=gr.reduce((a,r)=>a+n(r.glshots),0),sv=gr.reduce((a,r)=>a+n(r.glsaves),0);const sp=sv/sh*100;
+      const hi=sp>=70.4;
+      cards.push(`${head}\n${sv} saves on ${sh} shots (${f1(sp)}%) in ${gr.length} game${gr.length>1?'s':''}. The human 3v3 goalie average is 70.4%, so that is ${hi?'above':'below'} par.\nNext skate: ${hi?'Keep the rebound control, then steal one extra save on the breakaway.':'Pick the goal you would most like back and tell us what you saw. Then we go again.'}\n🎙️ “${hi?'That is a goalie playing like the starter.':'Sixty-something percent is not our number. Settle in.'} Same time tomorrow.”`);
+      grades.push({p,g,line:`${sv}/${sh} saves`});return}
+    const act=rows.filter(r=>r.position!=='goalie'&&isActive(r));
+    const gs=act.reduce((a,r)=>a+n(r.skgoals),0),as=act.reduce((a,r)=>a+n(r.skassists),0),gv=act.reduce((a,r)=>a+n(r.skgiveaways),0),tk=act.reduce((a,r)=>a+n(r.sktakeaways),0),bl=act.reduce((a,r)=>a+n(r.skbs),0);
+    const best=[...s.games].map(gm=>{const r=gm.rows.find(x=>x.name===p.key&&x.position!=='goalie'&&isActive(x));return r?{gm,pts:n(r.skgoals)+n(r.skassists),gv:n(r.skgiveaways)}:null}).filter(Boolean);
+    const top=[...best].sort((a,b)=>b.pts-a.pts)[0],worstGv=[...best].sort((a,b)=>b.gv-a.gv)[0];
+    const bk=benchOf(p,'giveaways'),perG=gv/act.length;
+    const mid=`${gs} goal${gs===1?'':'s'} and ${as} assist${as===1?'':'s'} in ${act.length} game${act.length>1?'s':''}${top&&top.pts>0?`, with ${top.pts} point${top.pts>1?'s':''} against ${top.gm.opp}`:''}. ${tk} takeaways, ${gv} giveaways${bk?` (${f1(perG)} a game; the 3v3 ${p.bench} average is ${f1(bk)})`:''}${p.bench==='defender'&&bl?`, ${bl} blocks`:''}.`;
+    const fix=perG>(bk||99)?`The giveaways are the topic, especially ${worstGv&&worstGv.gv>0?worstGv.gv+' against '+worstGv.gm.opp:'the ones off the first pass'}.`:`The puck care is acceptable. The next level is more takeaways than giveaways.`;
+    const asg=pick([`Find the short outlet before the puck arrives, then move for the return.`,`Scan the lane first. If it is closed, chip it out and reset.`,`Keep one skater above the play and take the simple first pass.`],h+p.key.length);
+    const q=pick([`“${gs+as} points is fine. ${gv>=5?gv+' giveaways is a meeting.':'Clean it up and keep going.'}”`,`“I count ${gs+as} on the sheet. Now let me count fewer turnovers next time.”`,`“Good production. The next step is protecting the puck.”`],h+p.nick.length);
+    cards.push(`${head}\n${mid} ${fix}\nNext skate: ${asg}\n🎙️ ${q}`);
+    grades.push({p,g,pts:gs+as});
+  });
+  const stars=[...grades].sort((a,b)=>b.g.score-a.g.score).slice(0,3);
+  const star=stars.map((x,i)=>`${i+1}. ${x.p.nick.split(' ')[0]} — Night Grade ${x.g.grade}, ${x.line||x.pts+' points'}.`).join('\n');
+  const nextItems=[];
+  const allGv=P.filter(p=>!p.isG).reduce((a,p)=>a+NR[p.key].reduce((x,r)=>x+n(r.skgiveaways),0),0),allTk=P.filter(p=>!p.isG).reduce((a,p)=>a+NR[p.key].reduce((x,r)=>x+n(r.sktakeaways),0),0);
+  if(allGv>allTk)nextItems.push('give the puck carrier a short outlet and cut the giveaways');
+  if(T.sf<T.sa)nextItems.push('win the shot count by keeping the puck in their end');
+  if(dnfs.length)nextItems.push('finish every game we start');
+  if(P.some(p=>!NR[p.key].some(r=>isActive(r)||n(r.glshots)>0)))nextItems.push('confirm the lineup before puck drop');
+  while(nextItems.length<3)nextItems.push(['keep a skater above the play on every rush','hold the shot quality we are generating in the slot','answer a goal against with a shift that gets the puck deep'][nextItems.length]);
+  const intro=`THE FINKLESTEIN REPORT | ${mon}`;
+  return {night,games:s.games.length,record:rec,goals:`${T.gf}–${T.ga}`,provisional:true,auto:true,
+   summary:[head,intro,sumry,`TEAM PERFORMANCE\n${rec} · Goals ${T.gf}–${T.ga} · Goal differential ${gd>0?'+':gd<0?'−':''}${Math.abs(gd)} · Shots ${T.sf}–${T.sa}\n${gl.join('\n')}`,`PLAYER REPORT CARDS`,cards.join('\n\n'),`🌟 THREE STARS\n${star}`,`🎯 THE NEXT SKATE\n${nextItems.slice(0,3).join(', ').replace(/^./,m=>m.toUpperCase())}.`].join('\n\n')};
+}
+window.AST.buildReport=night=>buildReport(night);
+
+function withAutoReports(){
+  const reps=((R&&R.reports)||[]).slice();
+  const s=latestNight();
+  if(s&&!reps.some(x=>x.night===s.key)){try{const a=buildReport(s.key);if(a)reps.unshift(a)}catch(e){console.error(e)}}
+  return reps;
+}
 
 /* ---------- LINES (lineup chemistry, same formula as the classic dashboard) ---------- */
 S.pairm='win';
@@ -1161,10 +1359,17 @@ function vClubHub(){
   return `<div class="ph"><h2>Club</h2><p>Trophies and records, the club profile with ChelHead trends, and every stat in tables.</p></div><div style="margin:0 0 14px">${seg}</div>${body}`;
 }
 
+S.coachmode='report';
+function vCoachHub(){
+  const seg=`<div class="chips" role="group" aria-label="Coach view">${[['report','Coach report'],['staff','Staff room']].map(([k,l])=>`<button class="chip" data-co="${k}" aria-pressed="${S.coachmode===k}">${l}</button>`).join('')}</div>`;
+  if(S.coachmode==='staff')return `<div class="ph"><h2>Staff room</h2><p>Assistant coaches and analysts weigh in on every stat, and on the newest games as they come in.</p></div><div style="margin:0 0 14px">${seg}</div>${vStaff()}`;
+  return stripHead(vCoach()).replace(/^/,`<div class="ph"><h2>Coach Finklestein</h2><p>The latest report, grades for every player, and what the numbers say about how we play.</p></div><div style="margin:0 0 14px">${seg}</div>`);
+}
+
 /* ---------- router + events ---------- */
 const TABS=[['home','Home','🏠'],['coach','Coach','🎙️'],['players','Players','🧑‍🚀'],['games','Games','🏒'],['compare','Compare','⚔️'],['ratings','Ratings','📈'],['club','Club','🏆']];
-const VIEWS={home:vHome,coach:vCoach,players:vPlayers,games:vGames,compare:vCompareHub,ratings:vRatings,club:vClubHub};
-const ALIAS={lineups:['compare','cmode','lineups'],trophies:['club','club','trophies'],stats:['club','club','stats'],profile:['club','club','profile']};
+const VIEWS={home:vHome,coach:vCoachHub,players:vPlayers,games:vGames,compare:vCompareHub,ratings:vRatings,club:vClubHub};
+const ALIAS={staff:['coach','coachmode','staff'],lineups:['compare','cmode','lineups'],trophies:['club','club','trophies'],stats:['club','club','stats'],profile:['club','club','profile']};
 function navHtml(){
   $('#rail').innerHTML=TABS.map(([k,l,e])=>`<a class="rbtn" href="#${k}" data-tab="${k}"><span aria-hidden="true">${e}</span>${l}</a>`).join('');
   $('#mnav').innerHTML=TABS.map(([k,l,e])=>`<a href="#${k}" data-tab="${k}"><span aria-hidden="true">${e}</span>${l}</a>`).join('');
@@ -1191,6 +1396,7 @@ document.addEventListener('click',e=>{
   if(t.classList.contains('gbtn')||t.classList.contains('pbtn')){
     const open=t.getAttribute('aria-expanded')==='true';t.setAttribute('aria-expanded',String(!open));
     const el=document.getElementById(t.getAttribute('aria-controls'));if(el)el.hidden=open;return}
+  if(d.co){S.coachmode=d.co;render(true);return}
   if(d.cm){S.cmode=d.cm;render(true);return}
   if(d.cl){S.club=d.cl;render(true);return}
   if(d.pm){S.pairm=d.pm;render(true);return}
