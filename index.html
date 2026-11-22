@@ -379,6 +379,7 @@ function derive(r){
 }
 function sessionKey(m){return m.sessionNight||m.observedDate||(m.ts?etKey(new Date(m.ts*1000-4*3600e3)):'unknown')}
 function prep(){
+  SCACHE={};
   P=D.members.map(derive).sort((a,b)=>a.key.localeCompare(b.key));
   P.forEach((p,i)=>{p.color=COL[i%4]});
   SK=P.filter(p=>!p.isG);GK=P.filter(p=>p.isG);
@@ -409,7 +410,10 @@ function slabel(s){
 const gdate=g=>/^\d{4}-/.test(g.dk)?shortDay(g.dk):'';
 
 /* ---------- metrics catalog (used by Players, Compare, Stats) ---------- */
-const MET=(label,get,type,o)=>Object.assign({label,get:typeof get==='function'?get:(p=>n(p.raw[get])),type,lower:false},o||{});
+const MET=(label,get,type,o)=>{const base=typeof get==='function'?get:(p=>n(p.raw[get]));
+  const m=Object.assign({label,type,lower:false,key:typeof get==='string'?get:null},o||{});
+  m.get=p=>{if(!S||S.scope==='career'||!p||!p.raw)return base(p);const sp=scopedP(p,metNeedsFull(m,p));if(!sp)return NaN;return metAvail(m,sp)?base(sp):NaN};
+  return m};
 const SKG=[
  ['Scoring',[MET('Goals','skgoals','n'),MET('Assists','skassists','n'),MET('Points','skpoints','n'),MET('Points / GP',p=>p.ppg,'r'),MET('Goals / GP',p=>p.gpg,'r'),MET('Assists / GP',p=>p.apg,'r'),MET('Plus / minus','skplusmin','n'),MET('Game-winning goals','skgwg','n'),MET('Hat tricks','skhattricks','n'),MET('Power-play goals','skppg','n'),MET('Short-handed goals','skshg','n')]],
  ['Shooting',[MET('Shots on goal','skshots','n'),MET('Shot attempts','skshotattempts','n'),MET('Shooting %','skshotpct','p'),MET('On-net %','skshotonnetpct','p'),MET('Shots / GP',p=>p.spg,'r'),MET('Deflections','skdeflections','n'),MET('Screen chances','skscrnchances','n'),MET('Breakaways','skbreakaways','n'),MET('Breakaway goals','skbrkgoals','n'),MET('Breakaway %','skbreakawaypct','p'),MET('Penalty shot %','skpenaltyshotpct','p')]],
@@ -424,7 +428,7 @@ const GLG=[
  ['Special saves',[MET('Breakaway saves','glbrksaves','n'),MET('Breakaway save %',p=>n(p.raw.glbrkshots)?n(p.raw.glbrksaves)/n(p.raw.glbrkshots)*100:0,'p'),MET('Penalty shot saves','glpensaves','n'),MET('Desperation saves','gldsaves','n'),MET('Poke checks','glpokechecks','n'),MET('Goalie DNF %','glDNF','p',{lower:true})]]
 ];
 function fmtV(t,v){if(v==null||!Number.isFinite(v))return '–';if(t==='n')return f0(v);if(t==='r')return f2(v);if(t==='p')return f1(v)+'%';if(t==='sec'){const s=Math.round(v);return Math.floor(s/60)+':'+String(s%60).padStart(2,'0')}return String(v)}
-function rankOf(m,p,peers){if(peers.length<2)return null;const v=m.get(p);return 1+peers.filter(q=>m.lower?m.get(q)<v:m.get(q)>v).length}
+function rankOf(m,p,peers){if(peers.length<2)return null;const v=m.get(p);if(!Number.isFinite(v))return null;return 1+peers.filter(q=>{const w=m.get(q);return Number.isFinite(w)&&(m.lower?w<v:w>v)}).length}
 
 /* ---------- chart helpers ---------- */
 let CH={},chSeq=0;
@@ -958,7 +962,7 @@ function vStats(){
 /* ---------- NIGHT GRADES computed from box scores (grading method v4) ---------- */
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 const rkey=pos=>pos==='center'?'center':pos==='defenseMen'?'defender':'wing';
-const isActive=r=>['skgoals','skassists','skshots','sktakeaways','skgiveaways','skbs','skhits','toiseconds'].some(k=>n(r[k])>0);
+const isActive=r=>{const t=r.toiseconds;if(t!=null&&t!==''&&n(t)>0&&n(t)<300)return false;return ['skgoals','skassists','skshots','sktakeaways','skgiveaways','skbs','skhits'].some(k=>n(r[k])>0)||n(t)>=300};
 const letter=s=>s>=90?'A':s>=80?'B':s>=70?'C':s>=60?'D':'F';
 /* items: [{r, b:{goals,assists,takeaways,giveaways,blocks}}] -> signal in [-1,1] or null */
 function skaterSignal(items){
@@ -1022,6 +1026,56 @@ function computeGrades(){
   return out;
 }
 window.AST={computeGrades:()=>computeGrades()};
+
+/* ---------- STAT SCOPE: last 5 (default), last 10, career ---------- */
+S.scope='l5';
+const SCOPE_N={l5:5,l10:10};
+const SCOPE_LBL={l5:'Last 5 games',l10:'Last 10 games',career:'Career'};
+let SCACHE={};
+const NUMF=['skgoals','skassists','skshots','skshotattempts','skplusmin','skppg','skshg','skgwg','skpasses','skpassattempts','sksaucerpasses','skhits','skbs','sktakeaways','skgiveaways','skinterceptions','skdeflections','skpim','skpenaltiesdrawn','skpossession','skfow','skfol','glsaves','glshots','glga','glbrksaves','glbrkshots','gldsaves','glpensaves','glpenshots','glpokechecks'];
+const SYNDEP={skpoints:['skgoals','skassists'],skshotpct:['skgoals','skshots'],skshotonnetpct:['skshots','skshotattempts'],skpasspct:['skpasses','skpassattempts'],skfop:['skfow','skfol'],skfo:['skfow','skfol'],skhattricks:['skgoals'],glso:['glga','glshots'],glgaa:['glga'],glwinpct:[],glwins:[],gllosses:[],glotl:[],glgp:[],skgp:[]};
+const DEPF={'Points / GP':['skgoals','skassists'],'Goals / GP':['skgoals'],'Assists / GP':['skassists'],'Shots / GP':['skshots'],'Hits / GP':['skhits'],'Blocks / GP':['skbs'],'Takeaways / GP':['sktakeaways'],'Giveaways / GP':['skgiveaways'],'Takeaway : giveaway':['sktakeaways','skgiveaways'],'Possession / GP':['skpossession'],'Save %':['glsaves','glshots'],'Breakaway save %':['glbrksaves','glbrkshots'],'PIM / GP':['skpim']};
+function scopedP(p,full){
+  if(S.scope==='career'||!p.raw)return p;
+  const key=p.key+'|'+S.scope+(full?'|f':'');if(SCACHE[key]!==undefined)return SCACHE[key];
+  const N=SCOPE_N[S.scope];const L=LOG[p.key]||{sk:[],gl:[]};
+  const all=p.isG?L.gl.filter(x=>n(x.r.glshots)>0&&(!full||x.r.glbrkshots!=null)):L.sk.filter(x=>isActive(x.r)&&(!full||x.r.skpasses!=null));
+  const ent=all.slice(-N);
+  if(!ent.length){SCACHE[key]=null;return null}
+  const raw={name:p.key},cov={};
+  NUMF.forEach(k=>{let t=0,c=0;ent.forEach(({r})=>{if(r[k]!=null&&r[k]!==''){t+=n(r[k]);c++}});raw[k]=t;cov[k]=c});
+  const cnt=ent.length;
+  if(p.isG){raw.glgp=cnt;raw.skgp=0;raw.skshots=0;raw.skgoals=0;raw.skassists=0}
+  else{raw.skgp=cnt;raw.glgp=0}
+  const pc={center:'cgp',leftWing:'lwgp',rightWing:'rwgp',defenseMen:'dgp'};['cgp','lwgp','rwgp','dgp'].forEach(k=>raw[k]=0);ent.forEach(({r})=>{if(pc[r.position])raw[pc[r.position]]++});
+  raw.skpoints=raw.skgoals+raw.skassists;
+  raw.skshotpct=raw.skshots?raw.skgoals/raw.skshots*100:0;
+  raw.skshotonnetpct=raw.skshotattempts?raw.skshots/raw.skshotattempts*100:0;
+  raw.skpasspct=raw.skpassattempts?raw.skpasses/raw.skpassattempts*100:0;
+  raw.skfo=raw.skfow+raw.skfol;raw.skfop=raw.skfo?raw.skfow/raw.skfo*100:0;
+  raw.skhattricks=ent.filter(({r})=>n(r.skgoals)>=3).length;
+  if(p.isG){raw.glwins=ent.filter(({g})=>g.res.w).length;raw.glotl=ent.filter(({g})=>!g.res.w&&g.res.ot).length;raw.gllosses=cnt-raw.glwins-raw.glotl;raw.glwinpct=raw.glwins/cnt*100;raw.glso=ent.filter(({r})=>n(r.glga)===0&&n(r.glshots)>0).length;raw.glgaa=raw.glga/cnt}
+  const sp=derive(raw);sp.isG=p.isG;sp.role=p.role;sp.bench=p.bench;sp.cov=cov;sp.scopeN=cnt;sp.ents=ent;sp.covAll=true;
+  SCACHE[key]=sp;return sp;
+}
+const BASICF=new Set(['skgoals','skassists','skshots','skhits','skbs','sktakeaways','skgiveaways','skplusmin']);
+function metDeps(m){return m.key?(SYNDEP[m.key]!==undefined?SYNDEP[m.key]:[m.key]):(DEPF[m.label]||null)}
+const GBASIC=new Set(['glsaves','glshots','glga','glgp','glwins','gllosses','glotl','glwinpct','glso','glgaa','skgp']);
+function metNeedsFull(m,p){const d=metDeps(m);if(!d)return false;return d.some(k=>!(p&&p.isG?GBASIC:BASICF).has(k))}
+function metAvail(m,sp){
+  const deps=metDeps(m);
+  if(deps==null)return false;
+  return deps.every(k=>(sp.cov[k]||0)===sp.scopeN);
+}
+function scopeChips(){
+  return `<div class="chips" role="group" aria-label="Stat range">${['l5','l10','career'].map(k=>`<button class="chip" data-sc="${k}" aria-pressed="${S.scope===k}">${SCOPE_LBL[k]}</button>`).join('')}</div>`;
+}
+function scopeNote(peers){
+  if(S.scope==='career')return `<p class="small muted" style="margin:8px 0 0">Career totals from the club report. These can include other game modes.</p>`;
+  const bits=(peers||P).map(p=>{const sp=scopedP(p),f=scopedP(p,true);return sp?`${p.nick}: ${sp.scopeN}${!p.isG&&f&&f.scopeN!==sp.scopeN?' ('+f.scopeN+' with full EA detail)':''}`:null}).filter(Boolean).join(' · ');
+  return `<p class="small muted" style="margin:8px 0 0">${SCOPE_LBL[S.scope]} from our tracked 3v3 games (games counted: ${esc(bits)}). Our older games only have basic box scores, so stats like passes, faceoffs and possession use the most recent games that have full EA detail. A dash means that stat was never recorded for those games and is left blank, not guessed. Switch to Career for the full list. The skill radar, league bars and shot maps on the Players page always show career totals, and the game-by-game charts show the last 25 games.</p>`;
+}
+window.AST.avail=()=>{const out={};['l5','l10'].forEach(sc=>{S.scope=sc;SCACHE={};P.forEach(p=>{const cats=p.isG?GLG:SKG;let t=0,a=0;const miss=[];cats.forEach(([,ms])=>ms.forEach(m=>{t++;if(Number.isFinite(m.get(p)))a++;else miss.push(m.label)}));out[sc+' '+p.nick]={n:scopedP(p)?scopedP(p).scopeN:0,avail:a+'/'+t,miss:miss.join(', ')}})});S.scope='l5';SCACHE={};return out};
 
 /* ---------- GAME CONTEXT (3v3 mode, human vs AI goalie, opponent tier) ---------- */
 const CTX={aiGoalie:1.10,perDivision:.03,cap:.15}; /* assumptions, kept in one place so they are easy to tune */
@@ -1366,6 +1420,13 @@ function vCoachHub(){
 /* ---------- router + events ---------- */
 const TABS=[['home','Home','🏠'],['coach','Coach','🎙️'],['players','Players','🧑‍🚀'],['games','Games','🏒'],['compare','Compare','⚔️'],['ratings','Ratings','📈'],['club','Club','🏆']];
 const VIEWS={home:vHome,coach:vCoachHub,players:vPlayers,games:vGames,compare:vCompareHub,ratings:vRatings,club:vClubHub};
+function withScope(fn,when){return ()=>{const h=fn();if(when&&!when())return h;
+  const bar=`<div class="card" style="margin:0 0 14px;padding:14px 16px"><div class="eyebrow" style="margin-bottom:8px">Stats shown</div>${scopeChips()}${scopeNote()}</div>`;
+  return h.replace(/(<div class="ph">[\s\S]*?<\/div>)/,'$1'+bar)}}
+VIEWS.players=withScope(VIEWS.players);
+VIEWS.compare=withScope(VIEWS.compare,()=>S.cmode==='players');
+VIEWS.club=withScope(VIEWS.club,()=>S.club==='stats');
+VIEWS.coach=withScope(VIEWS.coach,()=>S.coachmode==='staff');
 const ALIAS={staff:['coach','coachmode','staff'],lineups:['compare','cmode','lineups'],trophies:['club','club','trophies'],stats:['club','club','stats'],profile:['club','club','profile']};
 function navHtml(){
   $('#rail').innerHTML=TABS.map(([k,l,e])=>`<a class="rbtn" href="#${k}" data-tab="${k}"><span aria-hidden="true">${e}</span>${l}</a>`).join('');
@@ -1393,6 +1454,7 @@ document.addEventListener('click',e=>{
   if(t.classList.contains('gbtn')||t.classList.contains('pbtn')){
     const open=t.getAttribute('aria-expanded')==='true';t.setAttribute('aria-expanded',String(!open));
     const el=document.getElementById(t.getAttribute('aria-controls'));if(el)el.hidden=open;return}
+  if(d.sc){S.scope=d.sc;render(true);return}
   if(d.co){S.coachmode=d.co;render(true);return}
   if(d.cm){S.cmode=d.cm;render(true);return}
   if(d.cl){S.club=d.cl;render(true);return}
