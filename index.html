@@ -735,7 +735,7 @@ function vHome(){
   const earlier=SESS.slice(1,5);
   const earl=earlier.length?`<section class="card" id="cEarlier"><div class="h"><h2>Earlier sessions</h2><a class="link" href="#games" style="color:var(--goodText);font-weight:700;font-size:13px">All games →</a></div>${earlier.map((s,gi)=>{const l=slabel(s),tt=tally(s.games);return `<details class="sess"><summary><span>${esc(l.title)}</span><span class="pill num">${recText(tt)} · ${tt.gf}–${tt.ga}</span></summary><div class="games" style="padding:4px 0 12px">${s.games.map((g,i)=>gameRow(g,`h${gi+1}-${i}`)).join('')}</div></details>`}).join('')}</section>`:'';
   const go=[['🎙️','Coach','coach'],['🧑‍🚀','Players','players'],['🏒','Games','games'],['⚔️','Compare','compare'],['⚡','Lineups','lineups'],['📈','Ratings','ratings'],['🏆','Club & trophies','club'],['📊','Stat tables','stats']];
-  const deep=`<section class="card" id="cDeep"><div class="h"><h2>Dive deeper</h2><span class="small muted">Charts, every stat, player compare</span></div><div class="deep">${go.map(([e,l,h])=>`<a href="#${h}"><span aria-hidden="true">${e}</span>${l}</a>`).join('')}<a href="classic.html"><span aria-hidden="true">🗂️</span>Classic view</a></div><p class="small muted" style="margin:12px 0 0">Classic view is the previous dashboard, with ratings, lineup chemistry and career tabs.</p></section>`;
+  const deep=`<section class="card" id="cDeep"><div class="h"><h2>Dive deeper</h2><span class="small muted">Charts, every stat, player compare</span></div><div class="deep">${go.map(([e,l,h])=>`<a href="#${h}"><span aria-hidden="true">${e}</span>${l}</a>`).join('')}</div></section>`;
   return `<div class="homegrid"><div class="col">${hero}${snap}${earl}</div><div class="col">${coach}${cards}${deep}</div></div>`;
 }
 
