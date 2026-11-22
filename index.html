@@ -257,6 +257,17 @@ td.best{color:var(--cream);font-weight:700}
 .staffu:first-of-type{border-top:0}.staffu p{margin:0;color:var(--body);line-height:1.5;font-size:13.5px}
 .stfgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px}
 .stf{display:flex;gap:10px;align-items:center;background:var(--chip);border-radius:14px;padding:10px 12px}
+.snote{margin-top:14px;border-top:1px solid var(--line);padding-top:4px}
+.snote .sn{display:flex;gap:10px;align-items:flex-start;padding:9px 0;font-size:13px;line-height:1.45}
+.snote .sn p{margin:2px 0 0;color:var(--body)}
+.sbadge.sm{width:28px;height:28px;font-size:10.5px}
+.stat{position:relative}
+.tkb{position:absolute;top:8px;right:8px;width:20px;height:20px;border-radius:50%;border:0;color:#0c1626;font-weight:800;font-size:8px;line-height:1;padding:0;cursor:pointer;opacity:.9}
+td .tkb{position:static;display:inline-block;vertical-align:middle;margin-left:4px}
+.stat .tkt{display:none;font-size:12.5px;line-height:1.45;color:var(--body);white-space:normal;margin-top:8px;border-top:1px solid var(--line);padding-top:8px}
+.stat.open{grid-column:1/-1}.stat.open .tkt{display:block}
+.tkr td{background:var(--chip);font-size:12.5px;line-height:1.45;color:var(--body)}.tkr .tkt{display:block}
+.cmt{display:flex;gap:8px;align-items:flex-start;margin-top:6px;font-size:12.5px;line-height:1.4;color:var(--body)}
 .srow{display:grid;grid-template-columns:minmax(0,130px) minmax(0,1fr);gap:10px;padding:8px 0;border-top:1px solid var(--line);font-size:13px;line-height:1.45}
 .srow b{font-weight:700}.srow span{color:var(--body)}
 @media (max-width:560px){.srow{grid-template-columns:1fr;gap:2px}}
@@ -749,7 +760,8 @@ function vCoach(){
 /* ---------- state ---------- */
 S={tab:'home',sel:null,zmode:'shots',cmp:[],cgrp:'Overview',gfilter:'all',gq:'',sgrp:'Scoring',sq:'',pgrp:'Last games'};
 const mtile=(m,p,peers)=>{const v=m.get(p),rk=rankOf(m,p,peers);
-  return `<div class="stat"><div class="k">${esc(m.label)}</div><div class="v num">${fmtV(m.type,v)}</div>${rk?`<div class="rk">${rk===1?'<b>Best on team</b>':'#'+rk+' of '+peers.length}</div>`:''}</div>`};
+  return `<div class="stat"><div class="k">${esc(m.label)}</div><div class="v num">${fmtV(m.type,v)}</div>${rk?`<div class="rk">${rk===1?'<b>Best on team</b>':'#'+rk+' of '+peers.length}</div>`:''}${tkBtn(m.label)}${tkBody(m.label)}</div>`};
+const cmTake=l=>{const t=takeFor(l);if(!t)return '';const S_=STAFF[t.k];return `<div class="cmt"><span class="sbadge sm" style="background:${S_.col}">${S_.ini}</span><span>${esc(t.text)}</span></div>`};
 const chipsOf=(attr,items,cur)=>`<div class="chips" role="group">${items.map(([k,l,c])=>`<button class="chip" data-${attr}="${esc(k)}" aria-pressed="${String(k)===String(cur)}">${c?`<span class="cdot" style="background:${c}"></span>`:''}${esc(l)}</button>`).join('')}</div>`;
 const BENCHKEY={'Goals / GP':'goals','Assists / GP':'assists','Giveaways / GP':'giveaways','Takeaways / GP':'takeaways','Blocks / GP':'blocks'};
 
@@ -865,11 +877,11 @@ function vCompare(){
     body=`<div class="grid">
      <section class="card s2"><div class="h"><h2>Skill shape</h2></div>${radar(ax.map(a=>a[0]),sel.map(p=>({vals:ax.map(([,f],i)=>f(p)/mx[i]),color:p.color})))}${legend(sel.map(p=>({name:p.nick,color:p.color})))}<p class="small muted" style="margin:0">The outer ring is the best on the club in each skill.</p></section>
      <section class="card s2"><div class="h"><h2>Who leads most stats</h2><span class="pill">${total} skater stats</span></div>${bars(sel.map(p=>({label:p.nick,value:tally2[p.key],color:p.color,text:tally2[p.key]+' wins'})),{max:Math.max(...Object.values(tally2),1)})}<p class="small muted" style="margin:10px 0 0">A stat counts when one player is clearly ahead of the others selected. Lower is better for giveaways, penalties and DNFs.</p>
-       <div class="eyebrow" style="margin:16px 0 4px">Headline numbers</div>${key.map(([l,f,t])=>{const vals=sel.map(f),mxv=Math.max(...vals,1e-9);return `<div class="cm"><div class="ml"><span>${l}</span></div>${bars(sel.map((p,i)=>({label:p.nick,value:vals[i],color:p.color,text:fmtV(t,vals[i])})),{max:mxv})}</div>`}).join('')}</section></div>`;
+       <div class="eyebrow" style="margin:16px 0 4px">Headline numbers</div>${key.map(([l,f,t])=>{const vals=sel.map(f),mxv=Math.max(...vals,1e-9);return `<div class="cm"><div class="ml"><span>${l}</span></div>${bars(sel.map((p,i)=>({label:p.nick,value:vals[i],color:p.color,text:fmtV(t,vals[i])})),{max:mxv})}${cmTake(l)}</div>`}).join('')}</section></div>`;
   }else{
     const g=groups.find(x=>x[0]===S.cgrp);
     body=`<section class="card"><div class="h"><h2>${esc(g[0])}</h2>${legend(sel.map(p=>({name:p.nick,color:p.color})))}</div>${g[1].map(m=>{const vals=sel.map(p=>m.get(p));const best=m.lower?Math.min(...vals):Math.max(...vals);const mxv=Math.max(...vals.map(Math.abs),1e-9);const uniq=vals.filter(v=>v===best).length===1;
-      return `<div class="cm"><div class="ml"><span>${esc(m.label)}${m.lower?' <small>lower is better</small>':''}</span><small>${uniq?'Leader: <b class="lead">'+esc(sel[vals.indexOf(best)].nick)+'</b>':'Tied'}</small></div>${bars(sel.map((p,i)=>({label:p.nick,value:Math.abs(vals[i]),color:p.color,text:fmtV(m.type,vals[i])})),{max:mxv})}</div>`}).join('')}</section>`;
+      return `<div class="cm"><div class="ml"><span>${esc(m.label)}${m.lower?' <small>lower is better</small>':''}</span><small>${uniq?'Leader: <b class="lead">'+esc(sel[vals.indexOf(best)].nick)+'</b>':'Tied'}</small></div>${bars(sel.map((p,i)=>({label:p.nick,value:Math.abs(vals[i]),color:p.color,text:fmtV(m.type,vals[i])})),{max:mxv})}${cmTake(m.label)}</div>`}).join('')}</section>`;
   }
   const lg=sel.map(p=>({p,rows:LOG[p.key].sk.slice(-8)})).filter(x=>x.rows.length);
   let recent='';
@@ -954,7 +966,7 @@ function vStats(){
   }else{
     const g=gs.find(x=>x[0]===S.sgrp);
     const ms=g[1].filter(m=>!q||m.label.toLowerCase().includes(q));
-    table=`<div class="tscroll"><table><thead><tr><th>Stat</th>${P.map(p=>`<th><span class="cdot" style="background:${p.color};display:inline-block;margin-right:6px"></span>${esc(p.short)}</th>`).join('')}</tr></thead><tbody>${ms.map(m=>{const vals=P.map(p=>m.get(p));const cand=vals.filter(v=>v>0||m.lower);const best=cand.length?(m.lower?Math.min(...cand):Math.max(...cand)):null;return `<tr><td>${esc(m.label)}</td>${vals.map(v=>`<td class="num ${best!=null&&v===best&&vals.filter(x=>x===best).length<vals.length?'best':''}">${fmtV(m.type,v)}</td>`).join('')}</tr>`}).join('')||'<tr><td colspan="5">No stats match.</td></tr>'}</tbody></table></div><p class="small muted" style="margin:10px 0 0">The cream number is the best on the club in that row. Lower is better for giveaways, penalties and DNFs.</p>`;
+    table=`<div class="tscroll"><table><thead><tr><th>Stat</th>${P.map(p=>`<th><span class="cdot" style="background:${p.color};display:inline-block;margin-right:6px"></span>${esc(p.short)}</th>`).join('')}</tr></thead><tbody>${ms.map(m=>{const vals=P.map(p=>m.get(p));const cand=vals.filter(v=>v>0||m.lower);const best=cand.length?(m.lower?Math.min(...cand):Math.max(...cand)):null;return `<tr><td>${esc(m.label)} ${tkBtn(m.label)}</td>${vals.map(v=>`<td class="num ${best!=null&&v===best&&vals.filter(x=>x===best).length<vals.length?'best':''}">${fmtV(m.type,v)}</td>`).join('')}</tr>${takeFor(m.label)?`<tr class="tkr" hidden><td colspan="5">${tkBody(m.label)}</td></tr>`:''}`}).join('')||'<tr><td colspan="5">No stats match.</td></tr>'}</tbody></table></div><p class="small muted" style="margin:10px 0 0">The cream number is the best on the club in that row. Lower is better for giveaways, penalties and DNFs.</p>`;
   }
   return `<div class="ph"><h2>Stat tables</h2><p>Every number, side by side. Pick a category, or search.</p></div><div class="toolbar">${chips}</div><section class="card"><div class="toolbar" style="margin-bottom:12px"><h2 style="font-size:16px;margin:0">${esc(S.sgrp)}</h2><label class="search" style="flex:1;min-width:180px;max-width:320px"><span style="position:absolute;left:-9999px">Filter stats</span><input id="sq" type="search" placeholder="Filter stats" value="${esc(S.sq)}" autocomplete="off"></label></div>${table}</section>`;
 }
@@ -1219,6 +1231,28 @@ function playerStaffCard(p){
   return `<section class="card s4"><div class="h"><h2>What the staff says about ${esc(p.nick.split(' ')[0])}</h2><a class="pill i" href="#staff" style="text-decoration:none">Staff room</a></div>${staffRows(ups)}</section>`;
 }
 
+/* ---------- inline staff notes: sit inside the card or beside the stat they talk about ---------- */
+let TAKEC={key:null,map:null};
+function takeMap(){
+  const key=S.scope+'|'+MS.length+'|'+P.length;
+  if(TAKEC.key!==key){const m={},ev=staffEveryStat();
+    Object.keys(ev).forEach(k=>ev[k].forEach(g=>g.items.forEach(i=>{if(!m[i.label])m[i.label]={k,text:i.text}})));
+    TAKEC={key,map:m}}
+  return TAKEC.map;
+}
+function takeFor(label){try{return takeMap()[label]||null}catch(e){return null}}
+function tkBtn(label){const t=takeFor(label);if(!t)return '';const S_=STAFF[t.k];
+  return `<button class="tkb" style="background:${S_.col}" aria-label="${esc(S_.name)} on ${esc(label)}" title="${esc(S_.name)}">${S_.ini}</button>`}
+function tkBody(label){const t=takeFor(label);if(!t)return '';const S_=STAFF[t.k];
+  return `<div class="tkt"><b>${esc(S_.name)}</b> <span class="muted">· ${esc(S_.title)}</span><br>${esc(t.text)}</div>`}
+function snote(items){
+  if(!items||!items.length)return '';
+  return `<div class="snote">${items.map(u=>{const S_=STAFF[u.k];return `<div class="sn">${'<span class="sbadge sm" style="background:'+S_.col+'">'+S_.ini+'</span>'}<div><b>${esc(S_.name)}</b> <span class="muted">· ${esc(u.title)}</span><p>${esc(u.body)}</p></div></div>`}).join('')}</div>`;
+}
+function upsFor(keys){try{return staffUpdates().filter(u=>keys.includes(u.k))}catch(e){return []}}
+/* put html at the end of the card whose heading (or id) matches */
+function putIn(h,marker,html){if(!html)return h;const i=h.indexOf(marker);if(i<0)return h;const j=h.indexOf('</section>',i);if(j<0)return h;return h.slice(0,j)+html+h.slice(j)}
+
 /* ---------- COACH FINKLESTEIN report builder (same format the Coach tab already reads) ---------- */
 function overallAt(p,night){
   if(p.isG){let sh=0,sv=0,c=0;SESS.forEach(s=>{if(!/^\d{4}/.test(s.key)||s.key>night)return;s.games.forEach(g=>g.rows.forEach(r=>{if(r.name===p.key&&r.position==='goalie'&&n(r.glshots)>0){sh+=n(r.glshots);sv+=n(r.glsaves);c++}}))});
@@ -1458,13 +1492,22 @@ VIEWS.players=withScope(VIEWS.players);
 VIEWS.compare=withScope(VIEWS.compare,()=>S.cmode==='players');
 VIEWS.club=withScope(VIEWS.club,()=>S.club==='stats');
 VIEWS.coach=withScope(VIEWS.coach,()=>S.coachmode==='staff');
-function withStaff(fn,make,mode){return ()=>{const h=fn();let card='';try{card=make()}catch(e){console.error(e)}if(!card)return h;
-  if(mode==='home')return h.replace('<section class="card" id="cDeep">',card+'<section class="card" id="cDeep">');
-  return h.replace(/<\/div>\s*$/,card+'</div>')}}
-VIEWS.home=withStaff(VIEWS.home,()=>staffCard('From the staff room',['off','def','gol','dat'],'The assistants on the latest night.'),'home');
-VIEWS.games=withStaff(VIEWS.games,()=>staffCard('Scout and lines report',['scout','chem','pos']));
-VIEWS.ratings=withStaff(VIEWS.ratings,()=>staffCard('Analyst note on the grades',['dat']));
-VIEWS.players=withStaff(VIEWS.players,()=>{const p=P.find(x=>x.key===S.sel);return p?playerStaffCard(p):''});
+function withNotes(fn,make){return ()=>{let h=fn();try{h=make(h)||h}catch(e){console.error(e)}return h}}
+const U=(...k)=>snote(upsFor(k));
+VIEWS.home=withNotes(VIEWS.home,h=>{
+  h=putIn(h,'id="cRes"',U('off','gol'));
+  h=putIn(h,'id="cPlayers"',U('def'));
+  h=putIn(h,'id="cSnap"',U('pos','dat'));return h});
+VIEWS.games=withNotes(VIEWS.games,h=>{
+  h=putIn(h,'<h2>Tracked games</h2>',U('scout'));
+  h=putIn(h,'<h2>Shots for and against</h2>',U('pos'));
+  h=putIn(h,'<h2>Goals for and against</h2>',U('off'));return h});
+VIEWS.ratings=withNotes(VIEWS.ratings,h=>putIn(h,'<h2>Grade history</h2>',U('dat')));
+VIEWS.players=withNotes(VIEWS.players,h=>{const p=P.find(x=>x.key===S.sel);if(!p)return h;const ps=playerStaff(p);
+  const by=k=>snote(ps.filter(u=>u.k===k));
+  if(p.isG){h=putIn(h,'in net</h2>',by('gol'))}
+  else{h=putIn(h,'<h2>Points by game</h2>',by('off'));h=putIn(h,'<h2>Puck care by game</h2>',by('def'))}
+  return h});
 const ALIAS={staff:['coach','coachmode','staff'],lineups:['compare','cmode','lineups'],trophies:['club','club','trophies'],stats:['club','club','stats'],profile:['club','club','profile']};
 function navHtml(){
   $('#rail').innerHTML=TABS.map(([k,l,e])=>`<a class="rbtn" href="#${k}" data-tab="${k}"><span aria-hidden="true">${e}</span>${l}</a>`).join('');
@@ -1492,6 +1535,8 @@ document.addEventListener('click',e=>{
   if(t.classList.contains('gbtn')||t.classList.contains('pbtn')){
     const open=t.getAttribute('aria-expanded')==='true';t.setAttribute('aria-expanded',String(!open));
     const el=document.getElementById(t.getAttribute('aria-controls'));if(el)el.hidden=open;return}
+  if(t.classList.contains('tkb')){const st=t.closest('.stat');if(st){st.classList.toggle('open');return}
+    const tr=t.closest('tr');if(tr&&tr.nextElementSibling)tr.nextElementSibling.hidden=!tr.nextElementSibling.hidden;return}
   if(d.sc){S.scope=d.sc;render(true);return}
   if(d.co){S.coachmode=d.co;render(true);return}
   if(d.cm){S.cmode=d.cm;render(true);return}

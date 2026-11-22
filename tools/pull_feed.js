@@ -1,6 +1,6 @@
 // Run in the browser on https://chelhead.com/view-club/common-gen5/69789 (after the page has loaded).
 // Reads ChelHead's own recent-games feed and the club report already on the page, maps gamertags to the
-// dashboard's player keys (real gamertags never leave the browser), and saves astroneers_feed_rows.json to Downloads.
+// dashboard's player keys (real gamertags never leave the browser), and saves astroneers_feed_YYYYMMDDHHMM.json to Downloads.
 (async () => {
   const ME = '69789';
   const MAP = {WINTRXS:'astroneer_moose', TheCicc_WP:'astroneer_flappy', TheHoax_WP:'astroneer_gordy', Toastedlemur669:'astroneer_gumbo'};
@@ -37,7 +37,7 @@
     }
   }
   const blob = new Blob([JSON.stringify({pulledAt: new Date().toISOString(), keys: ['name', ...KEYS], games, club})], {type: 'application/json'});
-  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'astroneers_feed_rows.json';
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); const fname = 'astroneers_feed_' + new Date().toISOString().replace(/[-:T]/g, '').slice(0, 12) + '.json'; a.download = fname;
   document.body.appendChild(a); a.click(); a.remove();
-  return 'downloaded ' + games.length + ' games, club report ' + (club ? club.members.length + ' members' : 'MISSING');
+  return 'downloaded ' + fname + ': ' + games.length + ' games, club report ' + (club ? club.members.length + ' members' : 'MISSING');
 })()

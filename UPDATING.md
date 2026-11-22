@@ -13,6 +13,6 @@ see `GRADING_METHOD.md` in the handoff). Nothing else needs editing when new gam
 Smoke test (needs Playwright): `NODE_PATH=$(npm root -g) node tests/smoke.cjs .`
 
 ## Tools (in `tools/`)
-- `pull_feed.js`: run in the browser on the ChelHead club page. Saves `astroneers_feed_rows.json` with the newest games (full player lines, opponent goalie type, divisions) and the club's career totals. Gamertags are mapped to the dashboard's player keys before anything is saved.
-- `update.cjs`: `node tools/update.cjs astroneers_feed_rows.json .` merges that file into `matches.json` and `data.json`.
+- `pull_feed.js`: run in the browser on the ChelHead club page. Saves `astroneers_feed_YYYYMMDDHHMM.json` with the newest games (full player lines, opponent goalie type, divisions) and the club's career totals. Gamertags are mapped to the dashboard's player keys before anything is saved.
+- `update.cjs`: `node tools/update.cjs astroneers_feed_YYYYMMDDHHMM.json .` merges that file into `matches.json` and `data.json`.
 - A game's "night" is the Eastern date of the evening it started (games before 5 AM Eastern count for the evening before).
