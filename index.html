@@ -503,23 +503,52 @@ function zoneMap(shots,goals,mode){
   const sh=k=>n(shots[k]),gl=k=>n(goals[k]);
   const val=k=>mode==='goals'?gl(k):mode==='pct'?(sh(k)>=8?gl(k)/sh(k)*100:0):sh(k);
   const keys=Object.keys(ZG).map(Number),mx=Math.max(1,...keys.map(val));
+  const ICE='#e9f1f8',RED='#c8323a',BLUE='#2f6fb5';
+  /* rink: attacking zone, blue line at top, end boards at bottom */
+  let r=`<defs><clipPath id="rk"><rect x="2" y="2" width="336" height="300" rx="46"/></clipPath>
+    <linearGradient id="ice" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f3f8fc"/><stop offset="1" stop-color="#dbe7f2"/></linearGradient></defs>
+   <rect x="0" y="0" width="340" height="304" rx="48" fill="#8a5a3c"/>
+   <rect x="3" y="3" width="334" height="298" rx="45" fill="url(#ice)"/>
+   <g clip-path="url(#rk)" fill="none" stroke-linecap="round">
+    <rect x="0" y="40" width="340" height="7" fill="${BLUE}" opacity=".9" stroke="none"/>
+    <rect x="0" y="0" width="340" height="40" fill="#cfdbe8" opacity=".55" stroke="none"/>
+    <rect x="0" y="264" width="340" height="2.5" fill="${RED}" stroke="none"/>
+    <circle cx="62" cy="132" r="42" stroke="${RED}" stroke-width="2" opacity=".75"/><circle cx="278" cy="132" r="42" stroke="${RED}" stroke-width="2" opacity=".75"/>
+    <circle cx="62" cy="132" r="4.5" fill="${RED}" stroke="none"/><circle cx="278" cy="132" r="4.5" fill="${RED}" stroke="none"/>
+    <path d="M52 94v-8M72 94v-8M52 170v8M72 170v8M20 126h-8M20 138h-8M104 126h8M104 138h8M268 94v-8M288 94v-8M268 170v8M288 170v8M236 126h-8M236 138h-8M320 126h8M320 138h8" stroke="${RED}" stroke-width="2" opacity=".7"/>
+    <path d="M142 264a28 28 0 0 1 56 0z" fill="#a9cdee" stroke="${RED}" stroke-width="2" opacity=".95"/>
+    <path d="M122 266l8 28M218 266l-8 28" stroke="${RED}" stroke-width="1.6" opacity=".55"/>
+    <path d="M148 266h44v12a4 4 0 0 1-4 4h-36a4 4 0 0 1-4-4z" fill="#f5f6f7" stroke="${RED}" stroke-width="3"/>
+    <circle cx="170" cy="232" r="2.5" fill="${RED}" stroke="none" opacity=".6"/>
+   </g>`;
   let s='';
   keys.forEach(k=>{const g=ZG[k],v=val(k),a=v/mx;
     const txt=mode==='pct'?(sh(k)>=8?f1(v)+'%':'–'):f0(v);
-    s+=`<g><title>${ZNAME[k]}: ${f0(sh(k))} shots, ${f0(gl(k))} goals${sh(k)?' ('+f1(gl(k)/sh(k)*100)+'%)':''}</title><rect x="${g[0]}" y="${g[1]}" width="${g[2]}" height="${g[3]}" rx="9" fill="#63a6dd" fill-opacity="${(.07+a*.78).toFixed(2)}" stroke="var(--line)"/>
-    <text x="${g[0]+g[2]/2}" y="${g[1]+g[3]/2-1}" text-anchor="middle" font-size="${g[3]<40?11:15}" font-weight="700" fill="#f4f1e4">${txt}</text>
-    <text x="${g[0]+g[2]/2}" y="${g[1]+g[3]/2+(g[3]<40?10:13)}" text-anchor="middle" font-size="9" fill="#d6d6cf">${ZNAME[k]}</text></g>`});
-  return `<svg class="zmap" viewBox="0 0 340 304" role="img" aria-label="Shot location map by rink zone">${s}</svg>`;
+    const cx=g[0]+g[2]/2,cy=g[1]+g[3]/2,small=g[3]<40;
+    s+=`<g><title>${ZNAME[k]}: ${f0(sh(k))} shots, ${f0(gl(k))} goals${sh(k)?' ('+f1(gl(k)/sh(k)*100)+'%)':''}</title><rect x="${g[0]}" y="${g[1]}" width="${g[2]}" height="${g[3]}" rx="9" fill="${RED}" fill-opacity="${(.04+a*.62).toFixed(2)}" stroke="#7d93ab" stroke-opacity=".45" stroke-dasharray="3 3"/>
+    <text x="${cx}" y="${cy-1}" text-anchor="middle" font-size="${small?11:15}" font-weight="800" fill="#0b1a2e" stroke="#f3f8fc" stroke-width="3" paint-order="stroke">${txt}</text>
+    <text x="${cx}" y="${cy+(small?10:13)}" text-anchor="middle" font-size="8.5" font-weight="600" fill="#26405c" stroke="#f3f8fc" stroke-width="2.5" paint-order="stroke">${ZNAME[k]}</text></g>`});
+  return `<svg class="zmap" viewBox="0 0 340 304" role="img" aria-label="Shot location map drawn on an ice rink, attacking zone">${r}${s}</svg>`;
 }
 function netMap(shots,goals){
   const sh=k=>n(shots[k]),gl=k=>n(goals[k]);
-  const Z={1:[16,8,104,56,'Top left'],2:[120,8,104,56,'Top right'],3:[16,64,104,60,'Bottom left'],4:[120,64,104,60,'Bottom right']};
+  const Z={1:[18,10,102,56,'Top L'],2:[120,10,102,56,'Top R'],3:[18,66,102,58,'Low L'],4:[120,66,102,58,'Low R']};
   const mx=Math.max(1,...[1,2,3,4,5].map(sh));
   const pc=k=>sh(k)?f1(gl(k)/sh(k)*100)+'% goals':'0% goals';
-  let s=Object.keys(Z).map(k=>{const z=Z[k],a=sh(k)/mx;return `<g><title>${z[4]}: ${f0(sh(k))} shots, ${f0(gl(k))} goals</title><rect x="${z[0]}" y="${z[1]}" width="${z[2]}" height="${z[3]}" fill="#63a6dd" fill-opacity="${(.07+a*.78).toFixed(2)}" stroke="var(--line)"/><text x="${z[0]+z[2]/2}" y="${z[1]+z[3]/2-4}" text-anchor="middle" font-size="16" font-weight="700" fill="#f4f1e4">${f0(sh(k))}</text><text x="${z[0]+z[2]/2}" y="${z[1]+z[3]/2+10}" text-anchor="middle" font-size="9" fill="#f4f1e4">${z[4]}</text><text x="${z[0]+z[2]/2}" y="${z[1]+z[3]/2+21}" text-anchor="middle" font-size="8.5" fill="#d6d6cf">${pc(k)}</text></g>`}).join('');
+  const RED='#d6342f';
+  let d=`<defs><pattern id="mesh" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="8" height="8" fill="#16263c"/><path d="M0 0H8M0 0V8" stroke="#8aa4c0" stroke-width=".7" opacity=".55"/></pattern>
+   <linearGradient id="iceS" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#dbe7f2"/><stop offset="1" stop-color="#f3f8fc"/></linearGradient></defs>
+   <rect x="0" y="126" width="240" height="40" fill="url(#iceS)"/><rect x="0" y="125" width="240" height="2.5" fill="${RED}"/>
+   <path d="M12 6L30 14V124H12z M228 6L210 14V124H228z" fill="#101d30" opacity=".0"/>
+   <path d="M12 4H228V128H12z" fill="url(#mesh)"/>
+   <path d="M12 4L28 12H212L228 4" fill="none" stroke="#9db3ca" stroke-width="1.2" opacity=".7"/>
+   <path d="M28 12V128M212 12V128" stroke="#9db3ca" stroke-width="1" opacity=".5"/>`;
+  let s=Object.keys(Z).map(k=>{const z=Z[k],a=sh(k)/mx,top=k<3;
+    return `<g><title>${z[4]}: ${f0(sh(k))} shots, ${f0(gl(k))} goals</title><rect x="${z[0]}" y="${z[1]}" width="${z[2]}" height="${z[3]}" fill="${RED}" fill-opacity="${(.06+a*.62).toFixed(2)}" stroke="#cfe0f2" stroke-opacity=".35" stroke-dasharray="3 3"/><text x="${z[0]+z[2]/2}" y="${z[1]+(top?26:18)}" text-anchor="middle" font-size="16" font-weight="800" fill="#fff" stroke="#0b1a2e" stroke-width="3" paint-order="stroke">${f0(sh(k))}</text><text x="${z[0]+z[2]/2}" y="${z[1]+(top?39:30)}" text-anchor="middle" font-size="8.5" font-weight="600" fill="#e9f1f8" stroke="#0b1a2e" stroke-width="2.5" paint-order="stroke">${z[4]} · ${pc(k)}</text></g>`}).join('');
   const a5=sh(5)/mx;
-  s+=`<g><title>Five hole: ${f0(sh(5))} shots, ${f0(gl(5))} goals</title><rect x="52" y="136" width="136" height="24" rx="12" fill="#ec443d" fill-opacity="${(.15+a5*.7).toFixed(2)}" stroke="var(--line)"/><text x="120" y="152" text-anchor="middle" font-size="11" font-weight="700" fill="#f4f1e4">Five hole · ${f0(sh(5))} · ${pc(5)}</text></g>`;
-  return `<svg class="zmap" style="max-width:340px" viewBox="0 0 240 166" role="img" aria-label="Shots by spot on the net"><rect x="12" y="4" width="216" height="124" rx="6" fill="none" stroke="var(--muted)" stroke-width="3"/>${s}</svg>`;
+  s+=`<g><title>Five hole: ${f0(sh(5))} shots, ${f0(gl(5))} goals (${pc(5)})</title><rect x="98" y="99" width="44" height="25" rx="8" fill="${RED}" fill-opacity="${(.18+a5*.62).toFixed(2)}" stroke="#fff" stroke-opacity=".75" stroke-width="1.3"/><text x="120" y="111" text-anchor="middle" font-size="13" font-weight="800" fill="#fff" stroke="#0b1a2e" stroke-width="3" paint-order="stroke">${f0(sh(5))}</text><text x="120" y="121" text-anchor="middle" font-size="7.5" font-weight="600" fill="#e9f1f8" stroke="#0b1a2e" stroke-width="2.5" paint-order="stroke">Five hole</text></g>`;
+  const frame=`<path d="M12 128V6a2 2 0 0 1 2-2H226a2 2 0 0 1 2 2V128" fill="none" stroke="${RED}" stroke-width="6" stroke-linejoin="round"/><path d="M9 128h6M225 128h6" stroke="#fff" stroke-width="4"/>`;
+  return `<svg class="zmap" style="max-width:340px" viewBox="0 0 240 166" role="img" aria-label="Shots by spot on the net, drawn as a hockey goal">${d}${s}${frame}</svg>`;
 }
 function bars(items,o){
   o=o||{};const mx=o.max||Math.max(...items.map(i=>i.value),1e-9);
