@@ -251,6 +251,10 @@ td.best{color:var(--cream);font-weight:700}
 .pod .r i{font-style:normal;font-weight:700;color:var(--cream)}
 
 
+/* collapsible sections */
+.fold>summary{display:flex;align-items:center;justify-content:space-between;gap:12px;cursor:pointer;list-style:none;font:700 17px/1.2 var(--fh,inherit);min-height:44px}
+.fold>summary::-webkit-details-marker{display:none}
+.fold>summary .pill{margin-left:auto}
 /* lines + pair matrix */
 .line .h h2{margin:0}
 .lrate{width:64px;height:64px;border-radius:18px;background:var(--chip);display:flex;flex-direction:column;align-items:center;justify-content:center;flex:none}
@@ -671,7 +675,7 @@ function vHome(){
    <div class="stats" style="margin-top:14px"><div class="stat"><div class="k">Club record (EA)</div><div class="v num">${n(cs.wins)}–${n(cs.losses)}${n(cs.otl)?'–'+n(cs.otl):''}</div></div><div class="stat"><div class="k">Club goals (EA)</div><div class="v num">${n(cs.goals)}–${n(cs.goalsAgainst)}</div></div><div class="stat"><div class="k">Division</div><div class="v num">${n(cs.currentDivision)}</div></div></div></section>`;
   const earlier=SESS.slice(1,5);
   const earl=earlier.length?`<section class="card" id="cEarlier"><div class="h"><h2>Earlier sessions</h2><a class="link" href="#games" style="color:var(--goodText);font-weight:700;font-size:13px">All games →</a></div>${earlier.map((s,gi)=>{const l=slabel(s),tt=tally(s.games);return `<details class="sess"><summary><span>${esc(l.title)}</span><span class="pill num">${recText(tt)} · ${tt.gf}–${tt.ga}</span></summary><div class="games" style="padding:4px 0 12px">${s.games.map((g,i)=>gameRow(g,`h${gi+1}-${i}`)).join('')}</div></details>`}).join('')}</section>`:'';
-  const go=[['🎙️','Coach','coach'],['🧑‍🚀','Players','players'],['🏒','Games','games'],['⚔️','Compare','compare'],['⚡','Line chemistry','lineups'],['📈','Ratings','ratings'],['🏆','Trophies','trophies'],['📊','Stat tables','stats']];
+  const go=[['🎙️','Coach','coach'],['🧑‍🚀','Players','players'],['🏒','Games','games'],['⚔️','Compare','compare'],['⚡','Lineups','lineups'],['📈','Ratings','ratings'],['🏆','Club & trophies','club'],['📊','Stat tables','stats']];
   const deep=`<section class="card" id="cDeep"><div class="h"><h2>Dive deeper</h2><span class="small muted">Charts, every stat, player compare</span></div><div class="deep">${go.map(([e,l,h])=>`<a href="#${h}"><span aria-hidden="true">${e}</span>${l}</a>`).join('')}<a href="classic.html"><span aria-hidden="true">🗂️</span>Classic view</a></div><p class="small muted" style="margin:12px 0 0">Classic view is the previous dashboard, with ratings, lineup chemistry and career tabs.</p></section>`;
   return `<div class="homegrid"><div class="col">${hero}${snap}${earl}</div><div class="col">${coach}${cards}${deep}</div></div>`;
 }
@@ -907,6 +911,73 @@ function vStats(){
   return `<div class="ph"><h2>Stat tables</h2><p>Every number, side by side. Pick a category, or search.</p></div><div class="toolbar">${chips}</div><section class="card"><div class="toolbar" style="margin-bottom:12px"><h2 style="font-size:16px;margin:0">${esc(S.sgrp)}</h2><label class="search" style="flex:1;min-width:180px;max-width:320px"><span style="position:absolute;left:-9999px">Filter stats</span><input id="sq" type="search" placeholder="Filter stats" value="${esc(S.sq)}" autocomplete="off"></label></div>${table}</section>`;
 }
 
+/* ---------- NIGHT GRADES computed from box scores (grading method v4) ---------- */
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const rkey=pos=>pos==='center'?'center':pos==='defenseMen'?'defender':'wing';
+const isActive=r=>['skgoals','skassists','skshots','sktakeaways','skgiveaways','skbs','skhits','toiseconds'].some(k=>n(r[k])>0);
+const letter=s=>s>=90?'A':s>=80?'B':s>=70?'C':s>=60?'D':'F';
+/* items: [{r, b:{goals,assists,takeaways,giveaways,blocks}}] -> signal in [-1,1] or null */
+function skaterSignal(items){
+  if(!items.length)return null;
+  const T={a:0,e:0,ta:0,eta:0,gv:0,egv:0,bl:0,ebl:0,g:0,as:0};
+  items.forEach(({r,b})=>{T.a+=4*n(r.skgoals)+3*n(r.skassists);T.e+=4*b.goals+3*b.assists;
+    T.ta+=n(r.sktakeaways);T.eta+=b.takeaways;T.gv+=n(r.skgiveaways);T.egv+=b.giveaways;T.bl+=n(r.skbs);T.ebl+=b.blocks});
+  const rel=(x,e)=>e>0?clamp((x-e)/e/.60,-1,1):null;
+  const sc=rel(T.a,T.e),ta=rel(T.ta,T.eta);
+  const bl=rel(T.bl,T.ebl);
+  const ar=T.gv/Math.max(1,T.a),er=T.e>0?T.egv/Math.max(1,T.e):null;
+  const gv=er?clamp((er-ar)/er/.60,-1,1):null;
+  const defense=items[0].role==='defender';
+  const W=defense?[[sc,.45],[ta,.30],[bl,.10],[gv,.15]]:[[sc,.65],[ta,.20],[gv,.15]];
+  let w=0,s=0;W.forEach(([v,x])=>{if(v!=null){w+=x;s+=v*x}});
+  if(w<.5)return null;
+  return s/w;
+}
+function computeGrades(){
+  const B=(M.gradingBenchmarks&&M.gradingBenchmarks.roles)||{};
+  const nights=[...SESS].filter(s=>/^\d{4}/.test(s.key)).sort((a,b)=>a.key<b.key?-1:1);
+  const out=[];const hist={};P.forEach(p=>hist[p.key]=[]);
+  nights.forEach(s=>{
+    const res={night:s.key,rows:{}};
+    const byP={};P.forEach(p=>byP[p.key]=[]);
+    s.games.forEach(g=>g.rows.forEach(r=>{if(byP[r.name])byP[r.name].push(r)}));
+    P.forEach(p=>{
+      const rows=byP[p.key];
+      if(p.isG){
+        const gr=rows.filter(r=>r.position==='goalie'&&n(r.glshots)>0);
+        if(!gr.length)return;
+        const sh=gr.reduce((a,r)=>a+n(r.glshots),0),sv=gr.reduce((a,r)=>a+n(r.glsaves),0);
+        const sig=clamp((sv/sh-(B.goalie&&B.goalie.savePct||.704))/.12,-1,1);
+        const score=clamp(Math.round(78+25*sig),0,99);
+        res.rows[p.key]={score,grade:letter(score),n:gr.length,prov:gr.length<5,detail:`${sv} saves on ${sh} shots (${(sv/sh*100).toFixed(1)}%)`,personal:null};
+        hist[p.key].push({goalie:true,sv,sh});
+        return;
+      }
+      const act=rows.filter(r=>r.position!=='goalie'&&isActive(r));
+      if(!act.length)return;
+      const lg=act.map(r=>({r,b:B[rkey(r.position)],role:rkey(r.position)})).filter(x=>x.b);
+      const league=skaterSignal(lg);
+      if(league==null)return;
+      /* personal: strictly earlier nights */
+      const prior=hist[p.key].filter(x=>!x.goalie);
+      let pers=null,src='';
+      const avg=list=>{const m=list.length;return {goals:list.reduce((a,x)=>a+n(x.r.skgoals),0)/m,assists:list.reduce((a,x)=>a+n(x.r.skassists),0)/m,takeaways:list.reduce((a,x)=>a+n(x.r.sktakeaways),0)/m,giveaways:list.reduce((a,x)=>a+n(x.r.skgiveaways),0)/m,blocks:list.reduce((a,x)=>a+n(x.r.skbs),0)/m}};
+      let pool=null;
+      if(prior.length>=3){pool=avg(prior);src='own'}
+      else{const others=[];P.forEach(q=>{if(q.key!==p.key&&!q.isG)hist[q.key].filter(x=>!x.goalie).forEach(x=>others.push(x))});if(others.length>=3){pool=avg(others);src='team'}}
+      if(pool)pers=skaterSignal(act.map(r=>({r,b:pool,role:rkey(r.position)})));
+      const blend=pers==null?league:.8*league+.2*pers;
+      const score=clamp(Math.round(78+25*blend),0,99);
+      const tot=act.reduce((a,r)=>({g:a.g+n(r.skgoals),a:a.a+n(r.skassists),t:a.t+n(r.sktakeaways),v:a.v+n(r.skgiveaways)}),{g:0,a:0,t:0,v:0});
+      res.rows[p.key]={score,grade:letter(score),n:act.length,prov:act.length<5,detail:`${tot.g} G, ${tot.a} A, ${tot.t} takeaways, ${tot.v} giveaways in ${act.length} games`,personal:src};
+      act.forEach(r=>hist[p.key].push({r}));
+    });
+    if(Object.keys(res.rows).length){res.record=recText(tally(s.games));res.games=s.games.length;out.push(res)}
+  });
+  return out;
+}
+window.AST={computeGrades:()=>computeGrades()};
+
 /* ---------- LINES (lineup chemistry, same formula as the classic dashboard) ---------- */
 S.pairm='win';
 const POSN={center:'C',leftWing:'LW',rightWing:'RW',defenseMen:'D',goalie:'G'};
@@ -948,6 +1019,27 @@ function pairMatrix(mode){
   });
   return `<div class="mx" style="grid-template-columns:70px repeat(${P.length},minmax(0,1fr))">${head}${body}</div>`;
 }
+
+function partialLineups(){
+  const names=new Set(P.map(p=>p.key)),groups=new Map();
+  trackedGames().forEach(g=>{
+    const rs=g.rows.filter(x=>names.has(x.name)&&(x.position==='goalie'?n(x.glshots)>0:isActive(x)));
+    const guest=g.rows.some(x=>!names.has(x.name)&&/guest/i.test(x.name||''));
+    if(!rs.length)return;
+    const full=rs.filter(x=>x.position!=='goalie').length===3&&rs.some(x=>x.position==='goalie')&&!guest;
+    if(full)return;
+    const ids=[...new Set(rs.map(x=>x.name))].sort();
+    const hasG=rs.some(x=>x.position==='goalie');
+    const key=ids.join('|')+(guest?'+guest':'')+(hasG?'':'-nog');
+    if(!groups.has(key))groups.set(key,{ids,guest,hasG,games:[]});
+    groups.get(key).games.push(g);
+  });
+  return [...groups.values()].map(x=>({...x,t:tally(x.games)})).filter(x=>x.games.length>=2).sort((a,b)=>b.games.length-a.games.length);
+}
+function partialCard(){
+  const L=partialLineups();if(!L.length)return '';
+  return `<section class="card s4"><div class="h"><h2>Partial lineups</h2><span class="pill">Not rated</span></div><p class="small muted" style="margin:0 0 12px">These games are missing a player line (usually the goalie) or had a guest, so they can't be rated as a full lineup. They are still real results, just grouped by who was recorded.</p><div class="tscroll"><table><thead><tr><th>Who was recorded</th><th>GP</th><th>Record</th><th>Goals</th><th>Win %</th></tr></thead><tbody>${L.map(x=>`<tr><td>${x.ids.map(k=>{const p=P.find(q=>q.key===k);return `<span class="cdot" style="background:${p?p.color:'var(--muted)'};display:inline-block;margin-right:4px"></span>${esc(p?p.short:k)}`}).join(' · ')}${x.guest?' + guest':''}${x.hasG?'':' <span class="small muted">(goalie not recorded)</span>'}</td><td class="num">${x.games.length}</td><td class="num">${recText(x.t)}</td><td class="num">${x.t.gf}–${x.t.ga}</td><td class="num">${Math.round(x.t.w/x.games.length*100)}%</td></tr>`).join('')}</tbody></table></div></section>`;
+}
 function vLineups(){
   const L=lineups();
   const best=L.rows[0];
@@ -961,72 +1053,94 @@ function vLineups(){
   const rateBars=L.rows.length?`<section class="card s4"><div class="h"><h2>Lineups ranked</h2><span class="pill">${L.rows.length} full lineups</span></div>${bars(L.rows.map((r,i)=>({label:r.players.map(p=>P.find(x=>x.key===p.name)?P.find(x=>x.key===p.name).short:'').join(' · '),value:r.rating,text:r.rating+' · '+r.t.n+' GP',color:i===0?'#eae6ca':'#63a6dd'})),{max:100})}<p class="small muted" style="margin:10px 0 0">Bars are the 0 to 100 chemistry rating. Lineups with few games are pulled toward 50, so a hot two-game lineup does not top the list.</p></section>`:'';
   return `<div class="ph"><h2>Line chemistry</h2><p>How each full lineup of three skaters and a goalie has done together, and how every pair of players does when they share the ice.</p></div>
   <div class="grid">
-   <section class="card s4"><div class="stats"><div class="stat"><div class="k">Full lineups found</div><div class="v num">${L.rows.length}</div></div><div class="stat"><div class="k">Tracked games</div><div class="v num">${L.total}</div></div><div class="stat"><div class="k">Games used</div><div class="v num">${L.total-L.incomplete}</div></div><div class="stat"><div class="k">Missing a full lineup</div><div class="v num">${L.incomplete}</div></div>${best?`<div class="stat"><div class="k">Best rating</div><div class="v num">${best.rating}</div></div>`:''}</div></section>
-   ${rateBars}${cards||'<section class="card s4"><div class="empty">No complete roster lineup has been verified yet.</div></section>'}
+   <section class="card s4"><div class="stats"><div class="stat"><div class="k">Full lineups found</div><div class="v num">${L.rows.length}</div></div><div class="stat"><div class="k">Tracked games</div><div class="v num">${L.total}</div></div><div class="stat"><div class="k">Games used</div><div class="v num">${L.total-L.incomplete}</div></div><div class="stat"><div class="k">Not rateable</div><div class="v num">${L.incomplete}</div></div>${best?`<div class="stat"><div class="k">Best rating</div><div class="v num">${best.rating}</div></div>`:''}</div></section>
+   ${rateBars}${cards||'<section class="card s4"><div class="empty">No complete roster lineup has been verified yet.</div></section>'}${partialCard()}
    <section class="card s4"><div class="h"><h2>Pairs</h2>${chipsOf('pm',[['win','Win %'],['gd','Goal diff / game']],S.pairm)}</div>${pairMatrix(S.pairm)}<p class="small muted" style="margin:12px 0 0">Each box counts every tracked game where both players appear. The diagonal is a player's own games. Blue is better than even, red is worse. Tap or hover a box for the record.</p></section>
    <section class="card s4"><div class="h"><h2>How the rating works</h2></div><p class="small" style="margin:0;color:var(--body);line-height:1.55">A lineup is three skaters and one goalie who each played real minutes in the same game. Rating = 100 × (games × performance + 2) ÷ (games + 4). Performance is 60% win rate plus 40% goal share (goals for ÷ goals for and against). The +2 and +4 pull small samples toward 50. ${L.incomplete} of ${L.total} tracked games did not have a complete verified lineup and are left out.</p></section>
   </div>`;
 }
 
-/* ---------- RATINGS ---------- */
-function reportGrades(){
-  const out=[];
-  ((R&&R.reports)||[]).forEach(r=>{
-    const rows={};
-    String(r.summary||'').split('\n').forEach(l=>{
-      const m=l.match(/^[^\p{L}\p{N}]*(.+?)\s*(?:·|:)\s*Night Grade\s+(\S+)\s*·\s*(?:Astroneers\s+)?Overall\s+(\S+)/u);
-      if(m){const p=P.find(x=>x.nick===m[1].trim());if(p)rows[p.key]={grade:m[2],overall:/^\d+$/.test(m[3])?Number(m[3]):null}}});
-    if(Object.keys(rows).length)out.push({night:r.night,rows,record:r.record,games:r.games});
-  });
-  return out.sort((a,b)=>a.night<b.night?-1:1);
-}
+
+/* ---------- RATINGS (grades computed from the box scores, per grading method v4) ---------- */
 const GNUM={A:4,B:3,C:2,D:1,F:0};
-const gnum=g=>GNUM[(g||'')[0]];
+function reportGradeMap(){
+  const m={};
+  ((R&&R.reports)||[]).forEach(r=>{String(r.summary||'').split('\n').forEach(l=>{
+    const x=l.match(/^[^\p{L}\p{N}]*(.+?)\s*(?:·|:)\s*Night Grade\s+(\S+)\s*·\s*(?:Astroneers\s+)?Overall\s+(\S+)/u);
+    if(x){const p=P.find(q=>q.nick===x[1].trim());if(p)(m[r.night]=m[r.night]||{})[p.key]={grade:x[2],overall:/^\d+$/.test(x[3])?Number(x[3]):null}}})});
+  return m;
+}
+function gradeChip(g,sm){return `<span class="grade ${gcls(g)}" style="${sm?'display:inline-grid;width:32px;height:32px;font-size:14px':''}">${esc(g)}</span>`}
 function vRatings(){
-  const G=reportGrades(),ch=(M.chelhead)||{};
-  const latest=G[G.length-1];
+  const G=computeGrades(),RG=reportGradeMap(),ch=M.chelhead||{};
+  const lab=G.map(x=>shortDay(x.night));
+  const lastNight=G.length?G[G.length-1]:null;
   const cards=P.map(p=>{
-    const lr=latest&&latest.rows[p.key];
-    const ovr=p.isG?(ch.goalieRatings&&ch.goalieRatings[p.key]?ch.goalieRatings[p.key].overall:null):(ch.ratings&&ch.ratings[p.key]?ch.ratings[p.key].overall:null);
-    return `<section class="card s2"><div class="h" style="margin-bottom:10px"><div style="display:flex;gap:10px;align-items:center;min-width:0"><span class="cdot" style="background:${p.color};width:12px;height:12px"></span><div style="min-width:0"><h2 style="font-size:16px">${esc(p.nick)}</h2><div class="small muted">${esc(p.role)}${p.style?' · '+esc(p.style):''}</div></div></div>${lr?`<span class="grade ${gcls(lr.grade)}" aria-label="Latest night grade ${esc(lr.grade)}">${esc(lr.grade)}</span>`:''}</div>
-     <div class="stats"><div class="stat"><div class="k">ChelHead 3v3 ${p.isG?'goalie ':''}OVR</div><div class="v num">${ovr!=null?ovr:'–'}</div></div><div class="stat"><div class="k">Astroneers Overall</div><div class="v num">${lr&&lr.overall!=null?lr.overall:'–'}</div></div><div class="stat"><div class="k">Night grade${latest?' · '+esc(shortDay(latest.night)):''}</div><div class="v num">${lr?esc(lr.grade):'–'}</div></div></div></section>`}).join('');
-  /* history */
-  let hist='';
-  if(G.length>=1){
-    const lab=G.map(x=>shortDay(x.night));
-    const gl=lineChart({labels:lab,series:P.map(p=>({name:p.nick,color:p.color,vals:G.map(x=>x.rows[p.key]?gnum(x.rows[p.key].grade):null)})),min:0,max:4,yfmt:v=>['F','D','C','B','A'][v]||'',fmt:v=>['F','D','C','B','A'][v]||'',tipTitle:i=>'Night of '+fmtDay(G[i].night,true),aria:'Night grade by night'});
-    const ol=lineChart({labels:lab,series:P.map(p=>({name:p.nick,color:p.color,vals:G.map(x=>x.rows[p.key]&&x.rows[p.key].overall!=null?x.rows[p.key].overall:null)})),min:40,max:100,tipTitle:i=>'Night of '+fmtDay(G[i].night,true),aria:'Astroneers overall by night'});
-    hist=`<section class="card s2"><div class="h"><h2>Night grades</h2><span class="pill">${G.length} reports</span></div>${legend(P.map(p=>({name:p.nick,color:p.color})))}${gl}</section>
-     <section class="card s2"><div class="h"><h2>Astroneers Overall</h2><span class="pill">0 to 99</span></div>${legend(P.map(p=>({name:p.nick,color:p.color})))}${ol}</section>
-     <section class="card s4"><div class="h"><h2>Grade history</h2></div><div class="tscroll"><table><thead><tr><th>Player</th>${G.map(x=>`<th>${esc(shortDay(x.night))}<br><span style="font-weight:400;text-transform:none;letter-spacing:0">${esc(x.record)}</span></th>`).join('')}</tr></thead><tbody>${P.map(p=>`<tr><td><span class="cdot" style="background:${p.color};display:inline-block;margin-right:8px"></span>${esc(p.nick)}</td>${G.map(x=>{const r=x.rows[p.key];return `<td>${r?`<span class="grade ${gcls(r.grade)}" style="display:inline-grid;width:32px;height:32px;font-size:14px">${esc(r.grade)}</span> <span class="small muted num">${r.overall!=null?r.overall:''}</span>`:'<span class="muted">–</span>'}</td>`}).join('')}</tr>`).join('')}</tbody></table></div><p class="small muted" style="margin:10px 0 0">Each cell is the night grade and the Astroneers Overall for that night. A night with no verified games gets no grade.</p></section>`;
-  }
-  /* EA per game grades */
-  const eaRows=[];
-  MS.forEach(g=>g.rows.forEach(r=>{if(r.ratingOffense!=null&&r.position!=='goalie')eaRows.push({g,r})}));
-  const eaCard=eaRows.length?`<section class="card s4"><div class="h"><h2>EA game grades</h2><span class="pill">${eaRows.length} player games</span></div>${legend([{name:'Offense',color:'#63a6dd'},{name:'Defense',color:'#eae6ca'},{name:'Teamplay',color:'#d8737c'}])}<div class="tscroll"><table><thead><tr><th>Game</th><th>Player</th><th>Offense</th><th>Defense</th><th>Teamplay</th></tr></thead><tbody>${eaRows.map(({g,r})=>`<tr><td>${esc(g.res.code)} ${g.us}–${g.th} vs ${esc(g.opp)}</td><td>${esc(dn(r.name))}</td><td class="num">${n(r.ratingOffense)}</td><td class="num">${n(r.ratingDefense)}</td><td class="num">${n(r.ratingTeamplay)}</td></tr>`).join('')}</tbody></table></div><p class="small muted" style="margin:10px 0 0">These are the three grades EA records for a game. Only some games carry them.</p></section>`:'';
-  /* method */
+    let latest=null,when=null;for(let i=G.length-1;i>=0;i--){if(G[i].rows[p.key]){latest=G[i].rows[p.key];when=G[i].night;break}}
+    const own=p.isG?ch.goalieRatings:ch.ratings;const ovr=own&&own[p.key]?own[p.key].overall:null;
+    let rov=null;Object.keys(RG).sort().forEach(k=>{if(RG[k][p.key]&&RG[k][p.key].overall!=null)rov=RG[k][p.key].overall});
+    const sat=lastNight&&when!==lastNight.night;
+    return `<section class="card s2"><div class="h" style="margin-bottom:10px"><div style="display:flex;gap:10px;align-items:center;min-width:0"><span class="cdot" style="background:${p.color};width:12px;height:12px"></span><div style="min-width:0"><h2 style="font-size:16px">${esc(p.nick)}</h2><div class="small muted">${esc(p.role)}${p.style?' · '+esc(p.style):''}</div></div></div>${latest?gradeChip(latest.grade):''}</div>
+     <div class="stats"><div class="stat"><div class="k">Night grade${when?' · '+esc(shortDay(when)):''}</div><div class="v num">${latest?latest.score:'–'}</div></div><div class="stat"><div class="k">ChelHead ${p.isG?'goalie ':''}OVR</div><div class="v num">${ovr!=null?ovr:'–'}</div></div><div class="stat"><div class="k">Astroneers Overall</div><div class="v num">${rov!=null?rov:'–'}</div></div></div>
+     <p class="small muted" style="margin:10px 0 0">${latest?esc(latest.detail)+(latest.prov?'. Provisional, fewer than 5 games.':'.'):'No graded night yet.'}${sat?' Did not play the latest night ('+esc(shortDay(lastNight.night))+').':''}</p></section>`}).join('');
+  const sery=P.map(p=>({name:p.nick,color:p.color,vals:G.map(x=>x.rows[p.key]?x.rows[p.key].score:null)}));
+  const chart=G.length>1?lineChart({labels:lab,series:sery,min:40,max:100,tipTitle:i=>'Night of '+fmtDay(G[i].night,true),aria:'Night grade score by night'}):'<div class="empty">Need two graded nights for a chart.</div>';
+  const table=`<div class="tscroll"><table><thead><tr><th>Player</th>${G.map(x=>`<th>${esc(shortDay(x.night))}<br><span style="font-weight:400;text-transform:none;letter-spacing:0">${esc(x.record)}</span></th>`).join('')}</tr></thead><tbody>${P.map(p=>`<tr><td><span class="cdot" style="background:${p.color};display:inline-block;margin-right:8px"></span>${esc(p.nick)}</td>${G.map(x=>{const r=x.rows[p.key];if(!r)return '<td><span class="muted" title="Did not play">–</span></td>';const rep=(RG[x.night]||{})[p.key];const diff=rep&&rep.grade&&rep.grade[0]!==r.grade;return `<td>${gradeChip(r.grade,true)} <span class="small muted num">${r.score}${r.prov?'*':''}</span>${diff?`<div class="small muted" title="Coach report grade">report ${esc(rep.grade)}</div>`:''}</td>`}).join('')}</tr>`).join('')}</tbody></table></div><p class="small muted" style="margin:10px 0 0">Grades are worked out from the box scores. * means provisional (fewer than 5 games). A dash means the player did not play that night. If a coach report graded a night differently, it shows underneath.</p>`;
+  const eaRows=[];MS.forEach(g=>g.rows.forEach(r=>{if(r.ratingOffense!=null&&r.position!=='goalie')eaRows.push({g,r})}));
+  const eaCard=eaRows.length?`<section class="card s4"><details class="fold"><summary><span>EA game grades</span><span class="pill">${eaRows.length} player games</span></summary><div class="tscroll" style="margin-top:12px"><table><thead><tr><th>Game</th><th>Player</th><th>Off</th><th>Def</th><th>Team</th></tr></thead><tbody>${eaRows.map(({g,r})=>`<tr><td>${esc(g.res.code)} ${g.us}–${g.th} vs ${esc(g.opp)}</td><td>${esc(dn(r.name))}</td><td class="num">${n(r.ratingOffense)}</td><td class="num">${n(r.ratingDefense)}</td><td class="num">${n(r.ratingTeamplay)}</td></tr>`).join('')}</tbody></table></div><p class="small muted" style="margin:10px 0 0">The three grades EA records for a game. Only some games carry them.</p></details></section>`:'';
   const B=(M.gradingBenchmarks&&M.gradingBenchmarks.roles)||{};
-  const bt=Object.keys(B).filter(k=>k!=='goalie').length?`<div class="tscroll"><table><thead><tr><th>Role</th><th>Goals</th><th>Assists</th><th>Takeaways</th><th>Giveaways</th><th>Blocks</th></tr></thead><tbody>${['center','wing','defender'].filter(k=>B[k]).map(k=>`<tr><td>${k==='defender'?'Defense':cap(k)}</td><td class="num">${f2(B[k].goals)}</td><td class="num">${f2(B[k].assists)}</td><td class="num">${f2(B[k].takeaways)}</td><td class="num">${f2(B[k].giveaways)}</td><td class="num">${f2(B[k].blocks)}</td></tr>`).join('')}</tbody></table></div>`:'';
-  const gb=M.gradingBenchmarks||{};
-  const method=`<section class="card s4"><div class="h"><h2>How grades work</h2><span class="pill o">Experimental</span></div><div class="col2"><div>
+  const bt=`<div class="tscroll"><table><thead><tr><th>Role</th><th>Goals</th><th>Assists</th><th>Takeaways</th><th>Giveaways</th><th>Blocks</th></tr></thead><tbody>${['center','wing','defender'].filter(k=>B[k]).map(k=>`<tr><td>${k==='defender'?'Defense':cap(k)}</td><td class="num">${f2(B[k].goals)}</td><td class="num">${f2(B[k].assists)}</td><td class="num">${f2(B[k].takeaways)}</td><td class="num">${f2(B[k].giveaways)}</td><td class="num">${f2(B[k].blocks)}</td></tr>`).join('')}</tbody></table></div>`;
+  const method=`<section class="card s4"><details class="fold"><summary><span>How grades work</span><span class="pill o">Experimental</span></summary><div class="col2" style="margin-top:12px"><div>
     <div class="eyebrow" style="margin-bottom:8px">Night grade</div>
-    <p class="small" style="margin:0 0 10px;color:var(--body);line-height:1.55">A letter for one recorded night. It blends 80% how the night compares with an average 3v3 player in the same role and 20% how it compares with that player's own earlier games. Matching both gives a C. Goalies are graded on saves and shots against a human 3v3 goalie average of ${B.goalie&&B.goalie.savePct!=null?f1(B.goalie.savePct*100)+'%':'70.4%'}. Fewer than 5 active appearances keeps a grade provisional.</p>
+    <p class="small" style="margin:0 0 10px;color:var(--body);line-height:1.55">One letter for one night, worked out from the box scores. 80% is how the night compares with an average 3v3 player in the same role, 20% is how it compares with that player's own earlier nights (or the team's, until they have 3 games). Matching both gives a 78, a C. Forwards are scored on goals and assists, takeaways and giveaways. Defense adds blocks. Goalies are scored on pooled save % against a 70.4% human 3v3 goalie average. Under 5 games makes it provisional.</p>
     <div class="legend"><span><i style="background:#9fcdf0"></i>A 90+</span><span><i style="background:#63a6dd"></i>B 80 to 89</span><span><i style="background:#eae6ca"></i>C 70 to 79</span><span><i style="background:#ca5a63"></i>D 60 to 69</span><span><i style="background:#ec443d"></i>F under 60</span></div>
-    <div class="eyebrow" style="margin:14px 0 8px">Overall</div>
-    <p class="small" style="margin:0;color:var(--body);line-height:1.55">The Astroneers Overall is a separate 0 to 99 club-only rating built from each player's own tracked 3v3 history plus a small recent-form adjustment. It is not the night grade and not ChelHead's number.</p></div>
-   <div><div class="eyebrow" style="margin-bottom:8px">League averages used (per game)</div>${bt||'<p class="empty">Benchmarks are not in the data file.</p>'}<p class="small muted" style="margin:10px 0 0">${gb.source?esc(gb.source)+'. ':''}${gb.checkedAt?'Checked '+esc(String(gb.checkedAt).slice(0,10))+'. ':''}These are model averages ChelHead shows, not exact population figures.</p></div></div></section>`;
-  const note=`<section class="card s4"><div class="small muted" style="line-height:1.55">${esc(((M.reconciliation&&M.reconciliation.message)||''))} ${esc(((M.reconciliation&&M.reconciliation.details)||'').slice(0,320))}</div></section>`;
-  return `<div class="ph"><h2>Ratings</h2><p>Night grades, overalls, and ChelHead's numbers in one place. Grades come from Coach Finklestein's reports.</p></div><div class="grid">${cards}${hist}${eaCard}${method}${(M.reconciliation&&M.reconciliation.message)?note:''}</div>`;
+    <p class="small muted" style="margin:10px 0 0">Check: the site's Nov 18 grades match the coach regrade for Flappy 74, Gordy 83 and Moose 92. Gumbo comes out 96 against the report's 97.</p></div>
+   <div><div class="eyebrow" style="margin-bottom:8px">League averages used (per game)</div>${bt}<p class="small muted" style="margin:10px 0 0">ChelHead's visible averages for tracked 3v3 players, not exact population figures.</p></div></div></details></section>`;
+  const rec=M.reconciliation&&M.reconciliation.message?`<section class="card s4"><div class="small muted" style="line-height:1.55">${esc(M.reconciliation.message)}</div></section>`:'';
+  return `<div class="ph"><h2>Ratings</h2><p>Night grades are calculated from every game's box score. ChelHead's number and the coach's Overall sit beside them.</p></div><div class="grid">${cards}
+   <section class="card s2"><div class="h"><h2>Night grade score</h2><span class="pill">${G.length} nights</span></div>${legend(P.map(p=>({name:p.nick,color:p.color})))}${chart}</section>
+   <section class="card s2"><div class="h"><h2>Grade history</h2></div>${table}</section>${eaCard}${method}${rec}</div>`;
+}
+
+/* ---------- CLUB PROFILE + wrappers (consolidated tabs) ---------- */
+S.cmode='players';S.club='trophies';
+const NICKTXT=t=>String(t==null?'':t).replace(/astroneer_(\w+)/g,(m,k)=>{const p=P.find(q=>q.key===m);return p?p.nick:k});
+function insCard(i){
+  const up=i.trend==='up',dn_=i.trend==='down';
+  return `<section class="card s2"><div class="h" style="margin-bottom:8px"><span class="eyebrow">${esc(i.rail||'')}</span>${i.metric?`<span class="pill ${up?'i':''}">${esc(i.metric)}</span>`:''}</div><h2 style="font-size:15px;margin:0 0 6px">${esc(NICKTXT(i.title))}</h2>${i.value!=null?`<div class="num" style="font-size:26px;font-weight:700;margin:4px 0">${esc(i.value)} <span class="small" style="color:${up?'var(--good,#63a6dd)':dn_?'var(--bad,#ec443d)':'var(--muted)'}">${up?'▲':dn_?'▼':''}</span></div>`:''}${i.body?`<p class="small" style="margin:0;color:var(--body);line-height:1.5">${esc(NICKTXT(i.body))}</p>`:''}${i.footer?`<p class="small muted" style="margin:8px 0 0">${esc(NICKTXT(i.footer))}</p>`:''}</section>`;
+}
+function vProfile(){
+  const t=tally(MS),c=D.clubStats||{};const latest=SESS.find(s=>/^\d{4}/.test(s.key));const lt=latest?tally(latest.games):null;
+  const tile=(k,v)=>`<div class="stat"><div class="k">${esc(k)}</div><div class="v num">${esc(String(v))}</div></div>`;
+  const tiles=[['Tracked record',recText(t)],['Games tracked',t.n],['Goals for / against',t.gf+' / '+t.ga],['Goals per game',t.n?f2(t.gf/t.n):'–'],['Against per game',t.n?f2(t.ga/t.n):'–'],['Shots for / against',t.sf+' / '+t.sa],['Shot share',t.sf+t.sa?Math.round(t.sf/(t.sf+t.sa)*100)+'%':'–'],['Latest night',lt?recText(lt)+' · '+lt.n+' games':'–']];
+  const ea=[['Division',c.currentDivision],['EA season record',c.record],['Ranking points',c.rankingPoints],['Cups won',c.totalCupsWon],['Best division',c.bestDivision],['Promotions',c.promotions]].filter(x=>x[1]!=null&&x[1]!=='');
+  const ins=(M.chelhead&&M.chelhead.insights)||[],tr=(M.chelhead&&M.chelhead.matchTrends)||[];
+  return `<div class="grid"><section class="card s4"><div class="h"><h2>Club profile</h2><span class="pill">Astroneers · 69789</span></div><div class="stats">${tiles.map(x=>tile(...x)).join('')}</div><p class="small muted" style="margin:12px 0 0">Built from our saved, confirmed 3v3 games. It is a tracked sample, not a full EA career or season record.</p></section>
+   ${ea.length?`<section class="card s4"><div class="h"><h2>EA season fields</h2><span class="pill">From EA, kept separate</span></div><div class="stats">${ea.map(x=>tile(x[0],x[1])).join('')}</div><p class="small muted" style="margin:12px 0 0">EA often reports zeros for these. Nothing here is worked out from game history.</p></section>`:''}
+   ${tr.length?`<div class="s4" style="grid-column:1/-1"><div class="eyebrow" style="margin:6px 0 2px">Match trends · ChelHead</div></div>${tr.map(insCard).join('')}`:''}
+   ${ins.length?`<div class="s4" style="grid-column:1/-1"><div class="eyebrow" style="margin:6px 0 2px">Club insights · ChelHead</div></div>${ins.map(insCard).join('')}`:''}</div>`;
+}
+function stripHead(h){return h.replace(/^<div class="ph">[\s\S]*?<\/div>/,'')}
+function vCompareHub(){
+  const seg=`<div class="chips" role="group" aria-label="Compare view">${[['players','Players'],['lineups','Lineups']].map(([k,l])=>`<button class="chip" data-cm="${k}" aria-pressed="${S.cmode===k}">${l}</button>`).join('')}</div>`;
+  const body=S.cmode==='lineups'?vLineups():vCompare();
+  return `<div class="ph"><h2>Compare</h2><p>Put players side by side, or see how each lineup does together.</p></div><div style="margin:0 0 14px">${seg}</div>${stripHead(body)}`;
+}
+function vClubHub(){
+  const seg=`<div class="chips" role="group" aria-label="Club view">${[['trophies','Trophies'],['profile','Profile & trends'],['stats','All stats']].map(([k,l])=>`<button class="chip" data-cl="${k}" aria-pressed="${S.club===k}">${l}</button>`).join('')}</div>`;
+  const body=S.club==='profile'?vProfile():S.club==='stats'?stripHead(vStats()):stripHead(vTrophies());
+  return `<div class="ph"><h2>Club</h2><p>Trophies and records, the club profile with ChelHead trends, and every stat in tables.</p></div><div style="margin:0 0 14px">${seg}</div>${body}`;
 }
 
 /* ---------- router + events ---------- */
-const TABS=[['home','Home','🏠'],['coach','Coach','🎙️'],['players','Players','🧑‍🚀'],['games','Games','🏒'],['compare','Compare','⚔️'],['lineups','Lines','⚡'],['ratings','Ratings','📈'],['trophies','Trophies','🏆'],['stats','Stats','📊']];
-const VIEWS={home:vHome,coach:vCoach,players:vPlayers,games:vGames,compare:vCompare,lineups:vLineups,ratings:vRatings,trophies:vTrophies,stats:vStats};
+const TABS=[['home','Home','🏠'],['coach','Coach','🎙️'],['players','Players','🧑‍🚀'],['games','Games','🏒'],['compare','Compare','⚔️'],['ratings','Ratings','📈'],['club','Club','🏆']];
+const VIEWS={home:vHome,coach:vCoach,players:vPlayers,games:vGames,compare:vCompareHub,ratings:vRatings,club:vClubHub};
+const ALIAS={lineups:['compare','cmode','lineups'],trophies:['club','club','trophies'],stats:['club','club','stats'],profile:['club','club','profile']};
 function navHtml(){
   $('#rail').innerHTML=TABS.map(([k,l,e])=>`<a class="rbtn" href="#${k}" data-tab="${k}"><span aria-hidden="true">${e}</span>${l}</a>`).join('');
   $('#mnav').innerHTML=TABS.map(([k,l,e])=>`<a href="#${k}" data-tab="${k}"><span aria-hidden="true">${e}</span>${l}</a>`).join('');
 }
-function curTab(){const h=(location.hash||'').slice(1);return VIEWS[h]?h:'home'}
+function curTab(){const h=(location.hash||'').slice(1);if(ALIAS[h]){S[ALIAS[h][1]]=ALIAS[h][2];try{history.replaceState(null,'','#'+ALIAS[h][0])}catch(_){}return ALIAS[h][0]}return VIEWS[h]?h:'home'}
 function render(keepScroll){
   if(!D||!M)return;
   const y=window.scrollY;S.tab=curTab();CH={};chSeq=0;
@@ -1048,6 +1162,8 @@ document.addEventListener('click',e=>{
   if(t.classList.contains('gbtn')||t.classList.contains('pbtn')){
     const open=t.getAttribute('aria-expanded')==='true';t.setAttribute('aria-expanded',String(!open));
     const el=document.getElementById(t.getAttribute('aria-controls'));if(el)el.hidden=open;return}
+  if(d.cm){S.cmode=d.cm;render(true);return}
+  if(d.cl){S.club=d.cl;render(true);return}
   if(d.pm){S.pairm=d.pm;render(true);return}
   if(d.psel){S.sel=d.psel;render(true);return}
   if(d.zmode){S.zmode=d.zmode;render(true);return}
