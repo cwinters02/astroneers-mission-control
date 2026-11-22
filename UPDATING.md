@@ -16,3 +16,8 @@ Smoke test (needs Playwright): `NODE_PATH=$(npm root -g) node tests/smoke.cjs .`
 - `pull_feed.js`: run in the browser on the ChelHead club page. Saves `astroneers_feed_YYYYMMDDHHMM.json` with the newest games (full player lines, opponent goalie type, divisions) and the club's career totals. Gamertags are mapped to the dashboard's player keys before anything is saved.
 - `update.cjs`: `node tools/update.cjs astroneers_feed_YYYYMMDDHHMM.json .` merges that file into `matches.json` and `data.json`.
 - A game's "night" is the Eastern date of the evening it started (games before 5 AM Eastern count for the evening before).
+- `gen_report.cjs`: `NODE_PATH=$(npm root -g) node tools/gen_report.cjs .` writes an auto draft coach report for a finished night (newest game over 60 minutes old) that has no report yet. Hand-written reports are never replaced.
+- Chrome blocks a second automatic download from the same tab, so open a fresh tab on the ChelHead club page for each pull.
+
+## Nightly auto-update
+A scheduled task runs the pull, merge, report and smoke test, then pushes to `main`. It needs the owner's Mac awake with Chrome and the Claude extension signed in. ChelHead's overall ratings, insights and archetypes are not refreshed by this routine.
