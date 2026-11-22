@@ -659,7 +659,7 @@ function priorities(p){
 function playerLines(g){
   if(!g.rows.length)return `<p class="small" style="margin:6px 0 0">No player lines were captured for this game.</p>`;
   return g.rows.map(p=>{
-    const goalie=p.position==='goalie'||p.glshots!=null;
+    const goalie=p.position==='goalie';
     const txt=goalie?`${nz(p.glsaves)}/${nz(p.glshots)} saves · ${nz(p.glga)} GA`:`${nz(p.skgoals)} G · ${nz(p.skassists)} A · ${nz(p.skshots)} SOG · ${nz(p.skgiveaways)} GV`;
     return `<div class="pl"><b>${esc(dn(p.name))}</b><span class="num">${txt}</span></div>`}).join('');
 }
@@ -671,7 +671,7 @@ function sessionBox(games){
   games.forEach(g=>{if(g.rows.length)withStats++;g.rows.forEach(p=>{
     if(p.partialStats)partial=true;
     const a=agg[p.name]||(agg[p.name]={name:p.name,goalie:false,g:0,a:0,sv:0,sh:0});
-    if(p.position==='goalie'||p.glshots!=null){a.goalie=true;a.sv+=n(p.glsaves);a.sh+=n(p.glshots)}else{a.g+=n(p.skgoals);a.a+=n(p.skassists)}})});
+    if(p.position==='goalie'){a.goalie=true;a.sv+=n(p.glsaves);a.sh+=n(p.glshots)}else{a.g+=n(p.skgoals);a.a+=n(p.skassists)}})});
   const rows=Object.values(agg).sort((x,y)=>(x.goalie-y.goalie)||((y.g+y.a)-(x.g+x.a)));
   if(!rows.length)return '';
   return `<div class="box"><h3>Session box score</h3><div class="tiles">${rows.map(a=>a.goalie
@@ -901,7 +901,7 @@ function ladderBadges(p){
 }
 function gameRecords(){
   const recs=[];
-  const best=(label,f,opt)=>{let b=null;MS.forEach(g=>g.rows.forEach(r=>{if(opt&&opt.goalie!==undefined&&(r.position==='goalie'||r.glshots!=null)!==opt.goalie)return;const v=f(r);if(v==null||!Number.isFinite(v))return;if(!b||v>b.v)b={v,r,g}}));if(b&&b.v>0)recs.push({label,v:b.v,txt:opt&&opt.fmt?opt.fmt(b):String(b.v),who:dn(b.r.name),vs:b.g.opp,day:gdate(b.g)})};
+  const best=(label,f,opt)=>{let b=null;MS.forEach(g=>g.rows.forEach(r=>{if(opt&&opt.goalie!==undefined&&(r.position==='goalie')!==opt.goalie)return;const v=f(r);if(v==null||!Number.isFinite(v))return;if(!b||v>b.v)b={v,r,g}}));if(b&&b.v>0)recs.push({label,v:b.v,txt:opt&&opt.fmt?opt.fmt(b):String(b.v),who:dn(b.r.name),vs:b.g.opp,day:gdate(b.g)})};
   best('Most goals in a game',r=>r.skgoals!=null?n(r.skgoals):null,{goalie:false});
   best('Most assists in a game',r=>r.skassists!=null?n(r.skassists):null,{goalie:false});
   best('Most points in a game',r=>r.skgoals!=null?n(r.skgoals)+n(r.skassists):null,{goalie:false});
