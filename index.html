@@ -67,6 +67,7 @@ a{color:inherit}
 .pill.l{background:rgba(236,68,61,.18);color:var(--badText)}
 .pill.w{background:rgba(99,166,221,.18);color:var(--goodText)}
 .chips{display:flex;gap:6px;flex-wrap:wrap}
+.recap{white-space:pre-wrap;word-break:break-word;font:13px/1.5 inherit;font-family:inherit;background:var(--chip);border-radius:12px;padding:14px;margin:0;max-height:420px;overflow:auto;color:var(--body)}
 .chip{border:0;background:var(--chip);padding:8px 14px;border-radius:999px;font-size:12.5px;white-space:nowrap;min-height:36px;display:inline-flex;align-items:center;gap:7px}
 .chip[aria-pressed=true]{background:var(--solid);color:#fff}
 .chip:hover:not([aria-pressed=true]){background:var(--hover)}
@@ -679,8 +680,9 @@ function sessionBox(games){
   const agg={};let withStats=0,partial=false;
   games.forEach(g=>{if(g.rows.length)withStats++;g.rows.forEach(p=>{
     if(p.partialStats)partial=true;
-    const a=agg[p.name]||(agg[p.name]={name:p.name,goalie:false,g:0,a:0,sv:0,sh:0});
-    if(p.position==='goalie'){a.goalie=true;a.sv+=n(p.glsaves);a.sh+=n(p.glshots)}else{a.g+=n(p.skgoals);a.a+=n(p.skassists)}})});
+    const gl=p.position==='goalie',k=p.name+(gl?'|G':'');
+    const a=agg[k]||(agg[k]={name:p.name,goalie:gl,g:0,a:0,sv:0,sh:0});
+    if(gl){a.sv+=n(p.glsaves);a.sh+=n(p.glshots)}else{a.g+=n(p.skgoals);a.a+=n(p.skassists)}})});
   const rows=Object.values(agg).sort((x,y)=>(x.goalie-y.goalie)||((y.g+y.a)-(x.g+x.a)));
   if(!rows.length)return '';
   return `<div class="box"><h3>Session box score</h3><div class="tiles">${rows.map(a=>a.goalie
@@ -739,6 +741,39 @@ function vHome(){
 
 /* ---------- COACH tab ---------- */
 let repSel=0;
+/* ---------- text recap for the team chat ---------- */
+const SITE_URL='https://cwinters02.github.io/astroneers-mission-control/';
+function recapText(rep){
+  if(!rep)return '';
+  const HEAD={'TEAM PERFORMANCE':'🏒 Team Performance','PLAYER REPORT CARDS':'📋 Player Report Cards','THREE STARS':'🌟 Three Stars','THE NEXT SKATE':'🎯 Next Skate','NEXT SKATE':'🎯 Next Skate','MISSION CONTROL':'🛰️ Mission Control'};
+  const cap=t=>{t=t.toLowerCase();return t.charAt(0).toUpperCase()+t.slice(1)};
+  const tcase=t=>t.toLowerCase().replace(/\b[a-z]/g,c=>c.toUpperCase());
+  let lines=String(rep.summary||'').replace(/\r/g,'').split('\n').map(l=>l.replace(/\s+$/,''));
+  let out=[],title='',headline='';
+  lines.forEach(l=>{
+    let m=l.match(/^THE FINKLESTEIN REPORT \|\s*(.+?)(?:\s+—\s+(.+))?$/i);
+    if(m&&!title){title='The Finklestein Report | '+tcase(m[1]).replace(/,\s*(\d{4})/,', $1');if(m[2])headline=m[2];return}
+    const key=l.replace(/^[^\p{L}]+/u,'').trim().toUpperCase();
+    if(HEAD[key]){out.push(HEAD[key]);return}
+    if(/^•\s*/.test(l)){out.push('• '+l.replace(/^•\s*/,''));return}
+    if(/^\*\s+/.test(l)){out.push('• '+l.replace(/^\*\s+/,''));return}
+    if(/^[WL] \d+[–-]\d+/.test(l)){out.push('• '+l);return}
+    const q=l.match(/^🎙️?\s*(“.*)$/u);if(q){out.push('🎙️ Finklestein '+q[1]);return}
+    out.push(l)});
+  // a headline that was on its own line before the title line (auto drafts)
+  if(!headline){const i=out.findIndex(l=>l.trim()!=='');if(i>=0&&!/^[🏒📋🌟🎯🛰]/u.test(out[i])){headline=out[i];out.splice(i,1)}}
+  let body=out.join('\n').replace(/\n{3,}/g,'\n\n').trim();
+  body=body.replace(/https?:\/\/cwinters02\.github\.io\/astroneers-mission-control\/?#?\S*/g,'').replace(/\n{3,}/g,'\n\n').trim();
+  if(!/🛰️ Mission Control/.test(body))body+='\n\n🛰️ Mission Control\nBox scores, grades and trends are live on GitHub Pages.';
+  return [title,headline,body].filter(Boolean).join('\n\n')+'\n'+SITE_URL;
+}
+function recapCard(rep){
+  const t=recapText(rep);if(!t)return '';
+  return `<section class="card s2" id="cRecap"><div class="h"><h2>Text for the team</h2><span class="pill i">Copy and send</span></div>
+   <p class="small muted" style="margin:0 0 10px">The morning recap, formatted for the group chat. Tap Copy, then paste it into Messages.</p>
+   <pre class="recap" id="recapTxt">${esc(t)}</pre>
+   <div class="chips" style="margin-top:12px"><button class="chip" data-copyrecap="1" aria-pressed="true">Copy text</button><a class="chip" href="sms:&body=${encodeURIComponent(t)}">Open in Messages</a></div></section>`;
+}
 function vCoach(){
   const reps=withAutoReports();
   const rep=reps[repSel]||reps[0];
@@ -749,6 +784,7 @@ function vCoach(){
   return `<div class="ph"><h2>Coach Finklestein</h2><p>The latest report, grades for every player, and what the numbers say about how we play.</p></div>
   <div class="grid">
    <section class="card s2"><div class="h"><h2>Morning report</h2>${sel}</div>${coachBlock(rep,false)}</section>
+   ${recapCard(rep)}
    <section class="card s2"><div class="h"><h2>Report cards</h2><span class="pill i">Tap a player</span></div>${p&&p.players.length?reportCards(p):'<p class="empty">No player grades in this report.</p>'}</section>
    <section class="card s4"><div class="h"><h2>What the numbers say</h2><span class="pill">Career totals</span></div><div class="col2">${notes.map(insRow).join('')}</div></section>
    ${ch.length?`<section class="card s4"><div class="h"><h2>ChelHead insights</h2><span class="pill">Via ChelHead</span></div><div class="col2">${ch.map(i=>insRow({tone:i.trend==='down'?'bad':'good',title:nickText(i.title),metric:i.metric,value:i.value,body:nickText(i.body||'')})).join('')}</div></section>`:''}
@@ -1547,6 +1583,10 @@ document.addEventListener('click',e=>{
   if(d.gf){S.gfilter=d.gf;render(true);return}
   if(d.sg){S.sgrp=d.sg;render(true);return}
   if(d.rep!=null){repSel=+d.rep;render(true);return}
+  if(d.copyrecap){const el=document.getElementById('recapTxt'),txt=el?el.textContent:'';
+    const done=()=>{t.textContent='Copied ✓';setTimeout(()=>{t.textContent='Copy text'},1800)};
+    const fb=()=>{try{const r=document.createRange();r.selectNodeContents(el);const sl=getSelection();sl.removeAllRanges();sl.addRange(r);t.textContent='Selected: copy it'}catch(e){}};
+    try{navigator.clipboard.writeText(txt).then(done,fb)}catch(e){fb()}return}
 });
 document.addEventListener('input',e=>{
   const id=e.target.id;
