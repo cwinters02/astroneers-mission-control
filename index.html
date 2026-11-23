@@ -1126,10 +1126,14 @@ window.AST.avail=()=>{const out={};['l5','l10'].forEach(sc=>{S.scope=sc;SCACHE={
 /* ---------- GAME CONTEXT (3v3 mode, human vs AI goalie, opponent tier) ---------- */
 const CTX={aiGoalie:1.10,perDivision:.03,cap:.15}; /* assumptions, kept in one place so they are easy to tune */
 function gameCtx(g){
-  const c=g.m.oppContext;if(!c)return {goalie:'unknown',gap:null,f:1};
-  const gap=(c.oppDivision!=null&&c.ourDivision!=null)?c.oppDivision-c.ourDivision:null;
+  const c=g.m.oppContext;
+  /* games without a recorded goalie type still carry both clubs' divisions, so opponent quality can be used */
+  const ud0=c?c.ourDivision:(g.m.us&&g.m.us.division),od0=c?c.oppDivision:(g.m.opp&&g.m.opp.division);
+  const ok=ud0!=null&&od0!=null&&ud0!==''&&od0!==''&&isFinite(ud0)&&isFinite(od0);
+  const gap=ok?Number(od0)-Number(ud0):null;
   const q=gap==null?0:clamp(CTX.perDivision*clamp(gap,-5,5),-CTX.cap,CTX.cap);
-  return {goalie:c.goalie,gap,f:(c.goalie==='ai'?CTX.aiGoalie:1)*(1+q)};
+  const goalie=c?c.goalie:'unknown';
+  return {goalie,gap,ud:ok?Number(ud0):null,od:ok?Number(od0):null,f:(goalie==='ai'?CTX.aiGoalie:1)*(1+q)};
 }
 function ctxTally(){
   const o={human:{g:0,s:0,n:0,w:0},ai:{g:0,s:0,n:0,w:0},unknown:{n:0}};
@@ -1307,10 +1311,17 @@ function buildReport(night){
   const dnfs=s.games.filter(g=>g.m.dnf);
   const ai=s.games.filter(g=>gameCtx(g).goalie==='ai').length;
   const head=T.w>T.l+T.o?`Astroneers take ${T.w} of ${s.games.length} games; Finklestein wants the turnovers gone`:T.w===T.l+T.o?`Astroneers split the night; Finklestein sees a team that can play better`:`Astroneers stumble through ${['zero','one','two','three','four','five','six','seven','eight','nine'][s.games.length]||s.games.length} games; Finklestein calls for a reset`;
-  const gl=s.games.map(g=>`${g.res.code==='W'||g.res.w?'W':g.res.ot?'OTL':'L'} ${g.us}–${g.th}${g.m.dnf?', DNF':''} vs. ${g.opp}`);
   const ctxs=s.games.map(g=>gameCtx(g));
-  const ctxTxt=ctxs.some(c=>c.goalie!=='unknown')?` Opposing goalies: ${ctxs.filter(c=>c.goalie==='human').length} human, ${ai} AI.`:'';
-  const sumry=`The Astroneers went ${rec} with ${T.gf} goals for and ${T.ga} against on ${T.sf} shots to ${T.sa}.${dnfs.length?` ${dnfs.length} of the ${s.games.length} games ended in a DNF, so ${dnfs.length>1?'those results are':'that result is'} real but the minutes are not.`:''}${ctxTxt}`;
+  const gl=s.games.map((g,k)=>{const c=ctxs[k];return `${g.res.code==='W'||g.res.w?'W':g.res.ot?'OTL':'L'} ${g.us}–${g.th}${g.m.dnf?', DNF':''} vs. ${g.opp}${c.od!=null?` (Div ${c.od})`:''}`});
+  const known=ctxs.filter(c=>c.gap!=null),better=known.filter(c=>c.gap<0),worse=known.filter(c=>c.gap>0);
+  const uds=known.map(c=>c.ud),udTxt=uds.length?(Math.min(...uds)===Math.max(...uds)?`Div ${uds[0]}`:`Div ${Math.min(...uds)}–${Math.max(...uds)}`):'';
+  const hardest=known.length?s.games[ctxs.indexOf([...known].sort((a,b)=>a.gap-b.gap)[0])]:null,hc=hardest?gameCtx(hardest):null;
+  const qTxt=known.length?` Opponent quality: ${better.length} of ${known.length} opponents sat in a better division than ours (we were ${udTxt}) and ${worse.length} in a worse one${hardest&&hc.gap<0?`; the toughest was ${hardest.opp} in Div ${hc.od}`:''}. The grades give extra credit for production against the tougher clubs and less for the softer ones.`:'';
+  const gTxt=ctxs.some(c=>c.goalie!=='unknown')?` Opposing goalies: ${ctxs.filter(c=>c.goalie==='human').length} human, ${ai} AI.`:` Whether the opposing goalie was human or AI was not recorded for these games, so no goalie adjustment was applied.`;
+  const tkAll=P.filter(p=>!p.isG).reduce((a,p)=>a+NR[p.key].reduce((x,r)=>x+(isActive(r)?n(r.sktakeaways):0),0),0),gvAll=P.filter(p=>!p.isG).reduce((a,p)=>a+NR[p.key].reduce((x,r)=>x+(isActive(r)?n(r.skgiveaways):0),0),0);
+  const shTxt=T.sf+T.sa>0?` We took ${Math.round(T.sf/(T.sf+T.sa)*100)}% of the shots.`:'';
+  const pcTxt=gvAll+tkAll>0?` Puck care: ${tkAll} takeaways to ${gvAll} giveaways, which costs more in 3v3 because there is nobody to cover for a bad pass.`:'';
+  const sumry=`The Astroneers went ${rec} with ${T.gf} goals for and ${T.ga} against on ${T.sf} shots to ${T.sa}.${shTxt}${dnfs.length?` ${dnfs.length} of the ${s.games.length} games ended in a DNF, so ${dnfs.length>1?'those results are':'that result is'} real but the minutes are not.`:''}${qTxt}${gTxt}${pcTxt}`;
   const cards=[];const grades=[];
   const EM={astroneer_moose:'🫎',astroneer_flappy:'🐦',astroneer_gordy:'💪',astroneer_gumbo:'🥅'};
   P.forEach(p=>{
