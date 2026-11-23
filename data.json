@@ -1,5 +1,5 @@
 {
- "fetchedAt": "2026-11-23T04:05:06Z",
+ "fetchedAt": "2026-11-23T14:11:11Z",
  "club": {
   "name": "Astroneers",
   "clubId": 69789,
@@ -1395,12 +1395,13 @@
  },
  "refreshStatus": {
   "career": {
-   "fetchedAt": "2026-11-22T13:56:29Z"
+   "fetchedAt": "2026-11-23T14:11:11Z"
   },
   "matches": {
-   "storedGames": 25,
-   "latestVerifiedNight": "2026-11-20",
-   "message": "Three new confirmed 3v3 results. Two dates straddle Eastern midnight and remain unassigned. The zero-shot DNF was observed on November 22 Eastern."
+   "storedGames": 33,
+   "latestVerifiedNight": "2026-11-22",
+   "verifiedAt": "2026-11-23T04:06:42.208Z",
+   "message": "Eight verified 3v3 games from the November 22 Eastern session. Current ChelHead cards agree with the five most recent saved results."
   }
  }
 }

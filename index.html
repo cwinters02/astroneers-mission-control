@@ -365,7 +365,7 @@ function result(m){const base=n(m.us.result)%16384;const ot=base===5||base===6;c
 function derive(r){
   const g=k=>n(r[k]);
   const o={key:r.name,short:cap(String(r.name).replace(/^astroneer_/,'')),nick:NICK[r.name]||r.name,raw:r};
-  o.gp=g('skgp');o.glgp=g('glgp');o.isG=g('glshots')>g('skshots');
+  o.gp=g('skgp');o.glgp=g('glgp');o.isG=r.name==='astroneer_gumbo';
   o.posGP={'Center':g('cgp'),'Left wing':g('lwgp'),'Right wing':g('rwgp'),'Defense':g('dgp'),'Goalie':o.glgp};
   o.role=o.isG?'Goalie':Object.entries(o.posGP).sort((a,b)=>b[1]-a[1])[0][0];
   o.bench=o.role==='Center'?'center':/wing/i.test(o.role)?'wing':o.role==='Defense'?'defender':'goalie';
@@ -382,23 +382,20 @@ function derive(r){
   o.dnf=g('playerDNF');o.quits=g('playerQuitDisc');
   o.sv=g('glsaves');o.sa=g('glshots');o.svp=o.sa?o.sv/o.sa*100:0;o.gaa=g('glgaa');o.ga=g('glga');o.so=g('glso');
   o.glw=g('glwins');o.gll=g('gllosses');o.glotl=g('glotl');
-  const ch=(M&&M.chelhead)||{};
-  o.ovr=ch.ratings&&ch.ratings[o.key]?ch.ratings[o.key].overall:null;
-  o.glovr=ch.goalieRatings&&ch.goalieRatings[o.key]?ch.goalieRatings[o.key].overall:null;
-  o.style=ch.archetypes&&ch.archetypes[o.key]?ch.archetypes[o.key].style:null;
   return o;
 }
 function sessionKey(m){return m.sessionNight||m.observedDate||(m.ts?etKey(new Date(m.ts*1000-4*3600e3)):'unknown')}
 function prep(){
   SCACHE={};
-  P=D.members.map(derive).sort((a,b)=>a.key.localeCompare(b.key));
+  P=D.members.map(derive).sort((a,b)=>Object.keys(NICK).indexOf(a.key)-Object.keys(NICK).indexOf(b.key));
   P.forEach((p,i)=>{p.color=COL[i%4]});
   SK=P.filter(p=>!p.isG);GK=P.filter(p=>p.isG);
   const pk=M.playerKeys||[];
-  MS=M.matches.map((m,idx)=>{
+  const datedSessions=new Set(M.matches.map(m=>m.sessionNight).filter(Boolean));
+  MS=M.matches.filter(m=>Number(m.gameType)===206&&m.confirmed3v3!==false&&(m.clubId==null||String(m.clubId)==='69789')).map((m,idx)=>{
     const rows=(m._stats&&m._stats.length)?m._stats:(m.players||[]).map(r=>Object.fromEntries(pk.map((k,j)=>[k,r[j]])));
     return {m,idx,id:m.id||('m'+idx),rows,res:result(m),us:n(m.us.score),th:n(m.opp.score),sf:n(m.us.shots),sa:n(m.opp.shots),opp:m.opp.name,
-      key:sessionKey(m),overnight:!m.sessionNight&&!!m.observedDate,dk:m.observedDate||(m.ts?etKey(new Date(m.ts*1000)):'')};
+      key:!m.sessionNight&&!m.ts&&datedSessions.has(m.observedDate)?'unknown':sessionKey(m),overnight:!m.sessionNight&&!!m.observedDate,dk:m.observedDate||(m.ts?etKey(new Date(m.ts*1000)):'')};
   });
   LOG={};P.forEach(p=>{LOG[p.key]={sk:[],gl:[]}});
   [...MS].reverse().forEach(g=>{g.rows.forEach(r=>{const L=LOG[r.name];if(!L)return;
@@ -616,7 +613,8 @@ function parseReport(txt){
       p.body=p.body.join(' ');out.players.push(p);return}
     if(/THREE STARS/i.test(ls[0])){ls.slice(1).forEach(l=>{if(isQ(l))out.starsQuote=clean(l);else{const mm=l.match(/^\d\.\s*(.+)$/);if(mm)out.stars.push(mm[1])}});return}
     if(/THE NEXT SKATE/i.test(ls[0])){out.next=ls.slice(1).join(' ');return}
-    if(i===0&&ls.length===1&&!/\|/.test(ls[0]))out.headline=ls[0];
+    if(i===0&&ls.length===1)out.headline=ls[0];
+    if(i===1&&out.headline&&/FINKLESTEIN REPORT/.test(out.headline))out.intro=ls[0];
     if(i===1&&/FINKLESTEIN REPORT/i.test(ls[0]))out.kicker=ls[0];
     if(i===2&&out.headline&&ls.length===1&&!/^[A-Z ]+$/.test(ls[0]))out.intro=ls[0];
   });
@@ -1415,20 +1413,20 @@ function reportGradeMap(){
 }
 function gradeChip(g,sm){return `<span class="grade ${gcls(g)}" style="${sm?'display:inline-grid;width:32px;height:32px;font-size:14px':''}">${esc(g)}</span>`}
 function vRatings(){
-  const G=computeGrades(),RG=reportGradeMap(),ch=M.chelhead||{};
+  const G=computeGrades(),RG=reportGradeMap();
+  const nightLetter=(night,p)=>RG[night]?.[p.key]?.grade||G.find(x=>x.night===night)?.rows[p.key]?.grade;
   const lab=G.map(x=>shortDay(x.night));
   const lastNight=G.length?G[G.length-1]:null;
   const cards=P.map(p=>{
     let latest=null,when=null;for(let i=G.length-1;i>=0;i--){if(G[i].rows[p.key]){latest=G[i].rows[p.key];when=G[i].night;break}}
-    const own=p.isG?ch.goalieRatings:ch.ratings;const ovr=own&&own[p.key]?own[p.key].overall:null;
     let rov=null;Object.keys(RG).sort().forEach(k=>{if(RG[k][p.key]&&RG[k][p.key].overall!=null)rov=RG[k][p.key].overall});
     const sat=lastNight&&when!==lastNight.night;
-    return `<section class="card s2"><div class="h" style="margin-bottom:10px"><div style="display:flex;gap:10px;align-items:center;min-width:0"><span class="cdot" style="background:${p.color};width:12px;height:12px"></span><div style="min-width:0"><h2 style="font-size:16px">${esc(p.nick)}</h2><div class="small muted">${esc(p.role)}${p.style?' · '+esc(p.style):''}</div></div></div>${latest?gradeChip(latest.grade):''}</div>
-     <div class="stats"><div class="stat"><div class="k">Night grade${when?' · '+esc(shortDay(when)):''}</div><div class="v num">${latest?latest.score:'–'}</div></div><div class="stat"><div class="k">ChelHead ${p.isG?'goalie ':''}OVR</div><div class="v num">${ovr!=null?ovr:'–'}</div></div><div class="stat"><div class="k">Astroneers Overall</div><div class="v num">${rov!=null?rov:'–'}</div></div></div>
+    return `<section class="card s2"><div class="h" style="margin-bottom:10px"><div style="display:flex;gap:10px;align-items:center;min-width:0"><span class="cdot" style="background:${p.color};width:12px;height:12px"></span><div style="min-width:0"><h2 style="font-size:16px">${esc(p.nick)}</h2><div class="small muted">${esc(p.role)}${p.style?' · '+esc(p.style):''}</div></div></div>${latest?gradeChip(nightLetter(when,p)):''}</div>
+     <div class="stats"><div class="stat"><div class="k">Astroneers Overall</div><div class="v num">${rov!=null?rov:'–'}</div></div></div>
      <p class="small muted" style="margin:10px 0 0">${latest?esc(latest.detail)+(latest.prov?'. Provisional, fewer than 5 games.':'.'):'No graded night yet.'}${sat?' Did not play the latest night ('+esc(shortDay(lastNight.night))+').':''}</p></section>`}).join('');
-  const sery=P.map(p=>({name:p.nick,color:p.color,vals:G.map(x=>x.rows[p.key]?x.rows[p.key].score:null)}));
-  const chart=G.length>1?lineChart({labels:lab,series:sery,min:40,max:100,tipTitle:i=>'Night of '+fmtDay(G[i].night,true),aria:'Night grade score by night'}):'<div class="empty">Need two graded nights for a chart.</div>';
-  const table=`<div class="tscroll"><table><thead><tr><th>Player</th>${G.map(x=>`<th>${esc(shortDay(x.night))}<br><span style="font-weight:400;text-transform:none;letter-spacing:0">${esc(x.record)}</span></th>`).join('')}</tr></thead><tbody>${P.map(p=>`<tr><td><span class="cdot" style="background:${p.color};display:inline-block;margin-right:8px"></span>${esc(p.nick)}</td>${G.map(x=>{const r=x.rows[p.key];if(!r)return '<td><span class="muted" title="Did not play">–</span></td>';const rep=(RG[x.night]||{})[p.key];const diff=rep&&rep.grade&&rep.grade[0]!==r.grade;return `<td>${gradeChip(r.grade,true)} <span class="small muted num">${r.score}${r.prov?'*':''}</span>${diff?`<div class="small muted" title="Coach report grade">report ${esc(rep.grade)}</div>`:''}</td>`}).join('')}</tr>`).join('')}</tbody></table></div><p class="small muted" style="margin:10px 0 0">Grades are worked out from the box scores. * means provisional (fewer than 5 games). A dash means the player did not play that night. If a coach report graded a night differently, it shows underneath.</p>`;
+  const sery=P.map(p=>({name:p.nick,color:p.color,vals:G.map(x=>GNUM[nightLetter(x.night,p)]??null)}));
+  const chart=G.length>1?lineChart({labels:lab,series:sery,min:0,max:4,yfmt:v=>'FDCBA'[v]||'',fmt:v=>'FDCBA'[v],tipTitle:i=>'Night of '+fmtDay(G[i].night,true),aria:'Night grade by night'}):'<div class="empty">Need two graded nights for a chart.</div>';
+  const table=`<div class="tscroll"><table><thead><tr><th>Player</th>${G.map(x=>`<th>${esc(shortDay(x.night))}<br><span style="font-weight:400;text-transform:none;letter-spacing:0">${esc(x.record)}</span></th>`).join('')}</tr></thead><tbody>${P.map(p=>`<tr><td><span class="cdot" style="background:${p.color};display:inline-block;margin-right:8px"></span>${esc(p.nick)}</td>${G.map(x=>{const r=x.rows[p.key];if(!r)return '<td><span class="muted" title="Did not play">–</span></td>';return `<td>${gradeChip(nightLetter(x.night,p),true)} ${r.prov?'*':''}</td>`}).join('')}</tr>`).join('')}</tbody></table></div><p class="small muted" style="margin:10px 0 0">Grades are worked out from the box scores. * means provisional (fewer than 5 games). A dash means the player did not play that night. Published report grades appear when available.</p>`;
   const eaRows=[];MS.forEach(g=>g.rows.forEach(r=>{if(r.ratingOffense!=null&&r.position!=='goalie')eaRows.push({g,r})}));
   const eaCard=eaRows.length?`<section class="card s4"><details class="fold"><summary><span>EA game grades</span><span class="pill">${eaRows.length} player games</span></summary><div class="tscroll" style="margin-top:12px"><table><thead><tr><th>Game</th><th>Player</th><th>Off</th><th>Def</th><th>Team</th></tr></thead><tbody>${eaRows.map(({g,r})=>`<tr><td>${esc(g.res.code)} ${g.us}–${g.th} vs ${esc(g.opp)}</td><td>${esc(dn(r.name))}</td><td class="num">${n(r.ratingOffense)}</td><td class="num">${n(r.ratingDefense)}</td><td class="num">${n(r.ratingTeamplay)}</td></tr>`).join('')}</tbody></table></div><p class="small muted" style="margin:10px 0 0">The three grades EA records for a game. Only some games carry them.</p></details></section>`:'';
   const B=(M.gradingBenchmarks&&M.gradingBenchmarks.roles)||{};
@@ -1437,11 +1435,11 @@ function vRatings(){
     <div class="eyebrow" style="margin-bottom:8px">Night grade</div>
     <p class="small" style="margin:0 0 10px;color:var(--body);line-height:1.55">One letter for one night, worked out from the box scores. 80% is how the night compares with an average 3v3 player in the same role, 20% is how it compares with that player's own earlier nights (or the team's, until they have 3 games). Matching both gives a 78, a C. Forwards are scored on goals and assists, takeaways and giveaways. Defense adds blocks. Goalies are scored on pooled save % against a 70.4% human 3v3 goalie average. Under 5 games makes it provisional.</p>
     <div class="legend"><span><i style="background:#9fcdf0"></i>A 90+</span><span><i style="background:#63a6dd"></i>B 80 to 89</span><span><i style="background:#eae6ca"></i>C 70 to 79</span><span><i style="background:#ca5a63"></i>D 60 to 69</span><span><i style="background:#ec443d"></i>F under 60</span></div>
-    <p class="small muted" style="margin:10px 0 0">Check: the site's Nov 18 grades match the coach regrade for Flappy 74, Gordy 83 and Moose 92. Gumbo comes out 96 against the report's 97.</p></div>
+    </div>
    <div><div class="eyebrow" style="margin-bottom:8px">League averages used (per game)</div>${bt}<p class="small muted" style="margin:10px 0 0">ChelHead's visible averages for tracked 3v3 players, not exact population figures.</p></div></div></details></section>`;
   const rec=M.reconciliation&&M.reconciliation.message?`<section class="card s4"><div class="small muted" style="line-height:1.55">${esc(M.reconciliation.message)}</div></section>`:'';
-  return `<div class="ph"><h2>Ratings</h2><p>Night grades are calculated from every game's box score. ChelHead's number and the coach's Overall sit beside them.</p></div><div class="grid">${cards}
-   <section class="card s2"><div class="h"><h2>Night grade score</h2><span class="pill">${G.length} nights</span></div>${legend(P.map(p=>({name:p.nick,color:p.color})))}${chart}</section>
+  return `<div class="ph"><h2>Ratings</h2><p>Night grades and Astroneers Overall use recorded club 3v3 box scores.</p></div><div class="grid">${cards}
+   <section class="card s2"><div class="h"><h2>Night grade trend</h2><span class="pill">${G.length} nights</span></div>${legend(P.map(p=>({name:p.nick,color:p.color})))}${chart}</section>
    <section class="card s2"><div class="h"><h2>Grade history</h2></div>${table}</section>${eaCard}${method}${rec}</div>`;
 }
 
