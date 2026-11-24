@@ -24,8 +24,8 @@ F.games.slice().sort((a, b) => a.ts - b.ts).forEach(g => {
       source: 'ChelHead club-matches feed', clubId: 69789, clubName: 'Astroneers', gameType: 206, confirmed3v3: true, uiVerified: false,
       verifiedAt: F.pulledAt, modeLabel: '3v3 lobby', type: g.type, sessionNight: nightOf(g.ts), dateNote: 'Timestamp from the ChelHead feed.',
       dnf: !!(g.usDnfWin || g.oppDnfWin), dtw: null,
-      us: {score: g.us, shots: g.usShots, result: g.us > g.th ? 1 : 2, division: g.usDivision},
-      opp: {name: g.opp, clubId: g.oppClubId, score: g.th, shots: g.thShots, division: g.oppDivision}};
+      us: {score: g.us, shots: g.usShots, result: g.us > g.th ? 1 : 2, division: 11 - g.usDivision},
+      opp: {name: g.opp, clubId: g.oppClubId, score: g.th, shots: g.thShots, division: 11 - g.oppDivision}};
     M.matches.unshift(m); added++;
   }
   if (m.ts == null) m.ts = g.ts;
@@ -36,7 +36,7 @@ F.games.slice().sort((a, b) => a.ts - b.ts).forEach(g => {
 // newest first, games without a timestamp keep their relative order after timestamped ones
 M.matches.sort((a, b) => (b.ts || 0) - (a.ts || 0) || 0);
 M.updatedAt = F.pulledAt;
-M.contextNote = 'oppContext: opponent goalie is "ai" when the opposing club had no goalie row (3 human skaters), otherwise "human". Divisions are the per-game clubDivision from the feed. Games without oppContext are older than the feed window and are treated as unknown.';
+M.contextNote = 'oppContext: opponent goalie is "ai" when the opposing club had no goalie row (3 human skaters), otherwise "human". Divisions in oppContext are the raw per-game clubDivision from the feed (10 is the top division); us/opp.division are stored on the site scale (11 minus the feed value, Div 1 is the best). Games without oppContext are older than the feed window and are treated as unknown.';
 fs.writeFileSync(mp, JSON.stringify(M));
 if (F.club && F.club.members && F.club.members.length === 4) {
   D.fetchedAt = F.pulledAt.replace(/\.\d+Z$/, 'Z'); D.club = F.club.club; D.clubStats = F.club.clubStats; D.positionCount = F.club.positionCount; D.members = F.club.members;

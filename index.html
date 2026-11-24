@@ -610,10 +610,10 @@ function parseReport(txt){
     if(m){
       const emo=(m[1].match(/^[^\p{L}\p{N}]+/u)||[''])[0].trim();
       const p={emoji:emo,name:m[1].replace(/^[^\p{L}\p{N}]+/u,'').trim(),grade:m[2],overall:m[3],body:[],next:'',quote:''};
-      ls.slice(1).forEach(l=>{if(isQ(l))p.quote=clean(l);else if(/^Next skate:/i.test(l))p.next=l.replace(/^Next skate:\s*/i,'');else p.body.push(l)});
+      ls.slice(1).forEach(l=>{if(isQ(l))p.quote=clean(l);else if(/^Next (skate|game):/i.test(l))p.next=l.replace(/^Next (skate|game):\s*/i,'');else p.body.push(l)});
       p.body=p.body.join(' ');out.players.push(p);return}
     if(/THREE STARS/i.test(ls[0])){ls.slice(1).forEach(l=>{if(isQ(l))out.starsQuote=clean(l);else{const mm=l.match(/^\d\.\s*(.+)$/);if(mm)out.stars.push(mm[1])}});return}
-    if(/THE NEXT SKATE/i.test(ls[0])){out.next=ls.slice(1).join(' ');return}
+    if(/THE NEXT (SKATE|GAME)/i.test(ls[0])){out.next=ls.slice(1).join(' ');return}
     if(i===0&&ls.length===1)out.headline=ls[0];
     if(i===1&&out.headline&&/FINKLESTEIN REPORT/.test(out.headline))out.intro=ls[0];
     if(i===1&&/FINKLESTEIN REPORT/i.test(ls[0]))out.kicker=ls[0];
@@ -696,7 +696,7 @@ function reportCards(p){
     const m=mem[pl.name];
     const tot=!m?'':(m.isG?`${f0(m.sv)} saves · ${f0(m.svp)}% save rate, club career`:`${f0(m.g)} G · ${f0(m.a)} A, club career`);
     return `<div class="prep"><button class="pbtn" type="button" aria-expanded="false" aria-controls="pm${i}"><span class="pemo">${esc(pl.emoji||'🏒')}</span><span><span class="pname">${esc(pl.name)}${pl.overall?`<small>Overall ${esc(pl.overall)}</small>`:''}</span><span class="pquote">${esc(pl.quote?'“'+pl.quote+'”':pl.body)}</span></span><span class="grade ${gcls(pl.grade)}" aria-label="Night grade ${esc(pl.grade)}">${esc(pl.grade)}</span></button>
-    <div class="pmore" id="pm${i}" hidden>${pl.body?`<p>${esc(pl.body)}</p>`:''}${pl.next?`<p><b>Next skate:</b> ${esc(pl.next)}</p>`:''}${tot?`<p class="small muted">${esc(tot)}</p>`:''}</div></div>`}).join('')}</div>`}
+    <div class="pmore" id="pm${i}" hidden>${pl.body?`<p>${esc(pl.body)}</p>`:''}${pl.next?`<p><b>Next game:</b> ${esc(pl.next)}</p>`:''}${tot?`<p class="small muted">${esc(tot)}</p>`:''}</div></div>`}).join('')}</div>`}
 function coachBlock(rep,withLate){
   if(!rep)return '<div class="coachhead"><div class="coachpic">🎙️</div><div><b>Coach Finklestein</b><span class="small muted">No report yet</span></div></div><p class="empty">The next coach report shows up here as soon as it is posted.</p>';
   const p=parseReport(rep.summary),pr=priorities(p);
@@ -745,7 +745,7 @@ let repSel=0;
 const SITE_URL='https://cwinters02.github.io/astroneers-mission-control/';
 function recapText(rep){
   if(!rep)return '';
-  const HEAD={'TEAM PERFORMANCE':'🏒 Team Performance','PLAYER REPORT CARDS':'📋 Player Report Cards','THREE STARS':'🌟 Three Stars','THE NEXT SKATE':'🎯 Next Skate','NEXT SKATE':'🎯 Next Skate','MISSION CONTROL':'🛰️ Mission Control'};
+  const HEAD={'TEAM PERFORMANCE':'🏒 Team Performance','PLAYER REPORT CARDS':'📋 Player Report Cards','THREE STARS':'🌟 Three Stars','THE NEXT SKATE':'🎯 Next Game','NEXT SKATE':'🎯 Next Game','THE NEXT GAME':'🎯 Next Game','NEXT GAME':'🎯 Next Game','MISSION CONTROL':'🛰️ Mission Control'};
   const cap=t=>{t=t.toLowerCase();return t.charAt(0).toUpperCase()+t.slice(1)};
   const tcase=t=>t.toLowerCase().replace(/\b[a-z]/g,c=>c.toUpperCase());
   let lines=String(rep.summary||'').replace(/\r/g,'').split('\n').map(l=>l.replace(/\s+$/,''));
@@ -1126,14 +1126,16 @@ window.AST.avail=()=>{const out={};['l5','l10'].forEach(sc=>{S.scope=sc;SCACHE={
 /* ---------- GAME CONTEXT (3v3 mode, human vs AI goalie, opponent tier) ---------- */
 const CTX={aiGoalie:1.10,perDivision:.03,cap:.15}; /* assumptions, kept in one place so they are easy to tune */
 function gameCtx(g){
-  const c=g.m.oppContext;
-  /* games without a recorded goalie type still carry both clubs' divisions, so opponent quality can be used */
-  const ud0=c?c.ourDivision:(g.m.us&&g.m.us.division),od0=c?c.oppDivision:(g.m.opp&&g.m.opp.division);
-  const ok=ud0!=null&&od0!=null&&ud0!==''&&od0!==''&&isFinite(ud0)&&isFinite(od0);
-  const gap=ok?Number(od0)-Number(ud0):null;
+  /* The ChelHead feed numbers divisions with 10 as the top division. The site shows Div 1 as the best,
+     so feed values are flipped (11 - x). Stored us/opp.division on older games already use the site scale. */
+  const c=g.m.oppContext,FLIP=x=>11-Number(x);
+  let ud=null,od=null;
+  if(c&&c.ourDivision!=null&&c.oppDivision!=null&&isFinite(c.ourDivision)&&isFinite(c.oppDivision)){ud=FLIP(c.ourDivision);od=FLIP(c.oppDivision)}
+  else{const a=g.m.us&&g.m.us.division,b=g.m.opp&&g.m.opp.division;if(a!=null&&b!=null&&a!==''&&b!==''&&isFinite(a)&&isFinite(b)){ud=Number(a);od=Number(b)}}
+  const gap=ud!=null?od-ud:null; /* positive: they sit in a lower division than we do */
   const q=gap==null?0:clamp(CTX.perDivision*clamp(gap,-5,5),-CTX.cap,CTX.cap);
   const goalie=c?c.goalie:'unknown';
-  return {goalie,gap,ud:ok?Number(ud0):null,od:ok?Number(od0):null,f:(goalie==='ai'?CTX.aiGoalie:1)*(1+q)};
+  return {goalie,gap,ud,od,f:(goalie==='ai'?CTX.aiGoalie:1)*(1+q)};
 }
 function ctxTally(){
   const o={human:{g:0,s:0,n:0,w:0},ai:{g:0,s:0,n:0,w:0},unknown:{n:0}};
@@ -1303,59 +1305,85 @@ const hash=s=>[...String(s)].reduce((a,c)=>(a*31+c.charCodeAt(0))>>>0,7);
 function buildReport(night){
   const s=SESS.find(x=>x.key===night);if(!s)return null;
   const G=computeGrades().find(x=>x.night===night);if(!G)return null;
-  const T=tally(s.games),NR=nightRows(s),h=hash(night);
-  const rec=`${T.w}–${T.l+T.o}`;const gd=T.gf-T.ga;
-  const day=fmtDay(night,true).split(',').slice(-1)[0].trim().replace(/^\w+ /,m=>m).toUpperCase();
+  const T=tally(s.games),NR=nightRows(s),h=hash(night),N=s.games.length;
+  const rec=`${T.w}–${T.l+T.o}`,gd=T.gf-T.ga;
   const mon=new Date(night+'T12:00:00').toLocaleString('en-US',{month:'long',day:'numeric'}).toUpperCase();
-  const wins=s.games.filter(g=>g.res.w),loss=s.games.filter(g=>!g.res.w);
-  const dnfs=s.games.filter(g=>g.m.dnf);
-  const ai=s.games.filter(g=>gameCtx(g).goalie==='ai').length;
-  const head=T.w>T.l+T.o?`Astroneers take ${T.w} of ${s.games.length} games; Finklestein wants the turnovers gone`:T.w===T.l+T.o?`Astroneers split the night; Finklestein sees a team that can play better`:`Astroneers stumble through ${['zero','one','two','three','four','five','six','seven','eight','nine'][s.games.length]||s.games.length} games; Finklestein calls for a reset`;
+  const dow=new Date(night+'T12:00:00').toLocaleString('en-US',{weekday:'long'});
+  const dnfs=s.games.filter(g=>g.m.dnf),ai=s.games.filter(g=>gameCtx(g).goalie==='ai').length;
+  const word=['zero','one','two','three','four','five','six','seven','eight','nine'][N]||String(N);
+  const wl=g=>g.res.w?'W':'L';
+  const score=g=>`${g.us}–${g.th}`;
   const ctxs=s.games.map(g=>gameCtx(g));
-  const gl=s.games.map((g,k)=>{const c=ctxs[k];return `${g.res.code==='W'||g.res.w?'W':g.res.ot?'OTL':'L'} ${g.us}–${g.th}${g.m.dnf?', DNF':''} vs. ${g.opp}${c.od!=null?` (Div ${c.od})`:''}`});
+  const lines=s.games.map((g,k)=>{const c=ctxs[k];return `${g.res.code==='W'||g.res.w?'W':g.res.ot?'OTL':'L'} ${score(g)}${g.res.ot?' (OT)':''}${g.m.dnf?', DNF':''} vs. ${g.opp}${c.od!=null?` (Div ${c.od})`:''}`});
+  /* skater production for the night */
+  const sk=P.filter(p=>!p.isG).map(p=>{const act=NR[p.key].filter(r=>r.position!=='goalie'&&isActive(r));
+    const gs=act.reduce((x,r)=>x+n(r.skgoals),0),as=act.reduce((x,r)=>x+n(r.skassists),0);
+    const best=s.games.map(gm=>{const r=gm.rows.find(x=>x.name===p.key&&x.position!=='goalie'&&isActive(x));return r?{gm,pts:n(r.skgoals)+n(r.skassists),gv:n(r.skgiveaways),g:n(r.skgoals)}:null}).filter(Boolean);
+    return {p,gs,as,pts:gs+as,gp:act.length,best,top:[...best].sort((x,y)=>y.pts-x.pts)[0],worstGv:[...best].sort((x,y)=>y.gv-x.gv)[0]}}).filter(x=>x.gp);
+  const hero=[...sk].sort((x,y)=>y.pts-x.pts)[0];
+  const short=p=>p.nick.split(' ')[0];
+  const tkAll=sk.reduce((a,x)=>a+NR[x.p.key].reduce((y,r)=>y+(isActive(r)?n(r.sktakeaways):0),0),0),gvAll=sk.reduce((a,x)=>a+NR[x.p.key].reduce((y,r)=>y+(isActive(r)?n(r.skgiveaways):0),0),0);
+  const win=T.w>T.l+T.o,split=T.w===T.l+T.o;
+  const head=win?`🚨 BREAKING: Astroneers go ${rec} on ${dow}${hero&&hero.pts>=10?` and ${short(hero.p)} is COOKING, ${hero.pts} points`:''}`
+    :split?`🚨 BREAKING: Astroneers split ${word} games on ${dow}, and Coach has questions`
+    :`🚨 BREAKING: Astroneers stumble to ${rec} on ${dow}, and Coach is NOT happy`;
+  /* lede */
+  const l1=win?pick([`FOLKS, the Astroneers just went ${rec} on ${dow}`,`LET'S GOOO. The Astroneers went ${rec} on ${dow}`,`BOOM. The Astroneers went ${rec} on ${dow}`],h):split?pick([`FOLKS, the Astroneers split ${word} games on ${dow} at ${rec}`,`Wild one, folks. The Astroneers went ${rec} on ${dow}`],h):`Rough one, folks. The Astroneers went ${rec} on ${dow}`;
+  const l1b=hero&&hero.pts>0?`${win||split?', and':', with'} ${short(hero.p)} ${win?'was the whole show':'the lone bright spot'}: ${hero.gs} goal${hero.gs===1?'':'s'}, ${hero.as} assist${hero.as===1?'':'s'}, ${hero.pts} points, per the box score.`:'.';
+  const tp=hero&&hero.top&&hero.top.pts>=3?` ${hero.top.pts} of them came against ${hero.top.gm.opp} in a ${score(hero.top.gm)}${hero.top.gm.res.ot?' overtime':''} ${hero.top.gm.res.w?'W':'L'}.`:'';
+  const prob=gvAll>tkAll?pick([` The problem? ${gvAll} giveaways to ${tkAll} takeaways. Coach saw every single one.`,` Now the bad news: ${gvAll} giveaways to ${tkAll} takeaways. Coach has the tape and he is NOT smiling.`],h+3):` The good news: we took it away more than we gave it away, ${tkAll} to ${gvAll}. Clean hockey, folks.`;
+  const lede=l1+l1b+tp+prob;
+  /* details */
+  const wins=s.games.filter(g=>g.res.w).sort((x,y)=>(y.us-y.th)-(x.us-x.th)),loss=s.games.filter(g=>!g.res.w).sort((x,y)=>(y.th-y.us)-(x.th-x.us));
+  const dt=[];
+  if(wins.length)dt.push(`biggest win ${score(wins[0])} over ${wins[0].opp}`);
+  if(loss.length)dt.push(`toughest loss ${score(loss[0])} to ${loss[0].opp}${loss[0].m.dnf?' (DNF)':''}`);
   const known=ctxs.filter(c=>c.gap!=null),better=known.filter(c=>c.gap<0),worse=known.filter(c=>c.gap>0);
   const uds=known.map(c=>c.ud),udTxt=uds.length?(Math.min(...uds)===Math.max(...uds)?`Div ${uds[0]}`:`Div ${Math.min(...uds)}–${Math.max(...uds)}`):'';
-  const hardest=known.length?s.games[ctxs.indexOf([...known].sort((a,b)=>a.gap-b.gap)[0])]:null,hc=hardest?gameCtx(hardest):null;
-  const qTxt=known.length?` Opponent quality: ${better.length} of ${known.length} opponents sat in a better division than ours (we were ${udTxt}) and ${worse.length} in a worse one${hardest&&hc.gap<0?`; the toughest was ${hardest.opp} in Div ${hc.od}`:''}. The grades give extra credit for production against the tougher clubs and less for the softer ones.`:'';
-  const gTxt=ctxs.some(c=>c.goalie!=='unknown')?` Opposing goalies: ${ctxs.filter(c=>c.goalie==='human').length} human, ${ai} AI.`:` Whether the opposing goalie was human or AI was not recorded for these games, so no goalie adjustment was applied.`;
-  const tkAll=P.filter(p=>!p.isG).reduce((a,p)=>a+NR[p.key].reduce((x,r)=>x+(isActive(r)?n(r.sktakeaways):0),0),0),gvAll=P.filter(p=>!p.isG).reduce((a,p)=>a+NR[p.key].reduce((x,r)=>x+(isActive(r)?n(r.skgiveaways):0),0),0);
-  const shTxt=T.sf+T.sa>0?` We took ${Math.round(T.sf/(T.sf+T.sa)*100)}% of the shots.`:'';
-  const pcTxt=gvAll+tkAll>0?` Puck care: ${tkAll} takeaways to ${gvAll} giveaways, which costs more in 3v3 because there is nobody to cover for a bad pass.`:'';
-  const sumry=`The Astroneers went ${rec} with ${T.gf} goals for and ${T.ga} against on ${T.sf} shots to ${T.sa}.${shTxt}${dnfs.length?` ${dnfs.length} of the ${s.games.length} games ended in a DNF, so ${dnfs.length>1?'those results are':'that result is'} real but the minutes are not.`:''}${qTxt}${gTxt}${pcTxt}`;
-  const cards=[];const grades=[];
+  const hardest=known.length?s.games[ctxs.indexOf([...known].sort((x,y)=>x.gap-y.gap)[0])]:null,hc=hardest?gameCtx(hardest):null;
+  const qTxt=known.length?`Opponent quality: ${better.length} of ${known.length} opponents sat in a better division than ours (we were ${udTxt}) and ${worse.length} in a worse one${hardest&&hc.gap<0?`; the toughest was ${hardest.opp} in Div ${hc.od}`:''}. Grades give extra credit for beating the tougher clubs and less for the softer ones.`:'';
+  const gTxt=ctxs.some(c=>c.goalie!=='unknown')?`Opposing goalies: ${ctxs.filter(c=>c.goalie==='human').length} human, ${ai} AI.`:`The opposing goalie type (human or AI) was not recorded for these games, so no goalie adjustment was applied.`;
+  const shTxt=T.sf+T.sa>0?`We took ${Math.round(T.sf/(T.sf+T.sa)*100)}% of the shots (${T.sf}–${T.sa}).`:'';
+  const dnTxt=dnfs.length?`${dnfs.length} of the ${N} games ended in a DNF, so ${dnfs.length>1?'those results are':'that result is'} real but the minutes are not.`:'';
+  const details=`Details: ${[dt.length?dt.join('; ').replace(/^./,m=>m.toUpperCase())+'.':'',shTxt,dnTxt].filter(Boolean).join(' ')}\nThe context: ${[qTxt,gTxt].filter(Boolean).join(' ')}`;
+  /* cards */
+  const cards=[],grades=[];
   const EM={astroneer_moose:'🫎',astroneer_flappy:'🐦',astroneer_gordy:'💪',astroneer_gumbo:'🥅'};
   P.forEach(p=>{
-    const g=G.rows[p.key];const rows=NR[p.key];
-    if(!g){ if(!rows.some(r=>isActive(r)||n(r.glshots)>0)){cards.push(`${EM[p.key]||'🏒'} ${p.nick} · Night Grade N/A · Astroneers Overall ${overallAt(p,night)??'N/A'}\nNo recorded appearance this night, so there is no grade to hand out.\nNext skate: If you are out, tell the group before the first puck drop so we can set the lineup.`)}return}
-    const ov=overallAt(p,night);const head=`${EM[p.key]||'🏒'} ${p.nick} · Night Grade ${g.grade} · Astroneers Overall ${ov??'N/A'}`;
-    if(p.isG){const gr=rows.filter(r=>r.position==='goalie'&&n(r.glshots)>0);const sh=gr.reduce((a,r)=>a+n(r.glshots),0),sv=gr.reduce((a,r)=>a+n(r.glsaves),0);const sp=sv/sh*100;
-      const hi=sp>=70.4;
-      cards.push(`${head}\n${sv} saves on ${sh} shots (${f1(sp)}%) in ${gr.length} game${gr.length>1?'s':''}. The human 3v3 goalie average is 70.4%, so that is ${hi?'above':'below'} par.\nNext skate: ${hi?'Keep the rebound control, then steal one extra save on the breakaway.':'Pick the goal you would most like back and tell us what you saw. Then we go again.'}\n🎙️ “${hi?'That is a goalie playing like the starter.':'Sixty-something percent is not our number. Settle in.'} Same time tomorrow.”`);
+    const g=G.rows[p.key],rows=NR[p.key];
+    if(!g){if(!rows.some(r=>isActive(r)||n(r.glshots)>0)){cards.push(`${EM[p.key]||'🏒'} ${p.nick} · Night Grade N/A · Astroneers Overall ${overallAt(p,night)??'N/A'}\nNo recorded appearance this night, so no grade. If you are out, tell the group before first puck drop so we can set the lineup.`)}return}
+    const ov=overallAt(p,night),hd=`${EM[p.key]||'🏒'} ${p.nick} · Night Grade ${g.grade} · Astroneers Overall ${ov??'N/A'}`;
+    if(p.isG){
+      const gr=rows.filter(r=>r.position==='goalie'&&n(r.glshots)>0);const sh=gr.reduce((a,r)=>a+n(r.glshots),0),sv=gr.reduce((a,r)=>a+n(r.glsaves),0),sp=sh?sv/sh*100:0,hi=sp>=70.4,diff=Math.abs(sp-70.4);
+      const lead=g.grade==='A'||g.grade==='B'?pick([`Gumbo stood on his head.`,`The crease was LOCKED DOWN.`],h):pick([`The crease was a rough one.`,`Tough night between the pipes.`],h);
+      cards.push(`${hd}\n${lead} ${sv} saves on ${sh} shots, ${f1(sp)}% in ${gr.length} game${gr.length>1?'s':''}. The human 3v3 goalie average is 70.4%, so that is ${f1(diff)} points ${hi?'ABOVE':'below'} par.\nThe critique: ${hi?'great numbers, now steal one extra save on the breakaway.':'we need the first save to be clean and the rebounds to die. Not asking for perfect, asking for one more stop a game.'}\nNext game: ${hi?'Keep the rebound control, then steal one extra save on the breakaway.':'Pick the goal you would most like back and tell us what you saw. Then we go again.'}\n🎙️ “${hi?'That is a goalie playing like the last line of defense. Keep it rolling.':'Sixty-something percent is not our number. Settle in. Same time tomorrow.'}”`);
       grades.push({p,g,line:`${sv}/${sh} saves`});return}
+    const x=sk.find(q=>q.p.key===p.key);if(!x)return;
     const act=rows.filter(r=>r.position!=='goalie'&&isActive(r));
-    const gs=act.reduce((a,r)=>a+n(r.skgoals),0),as=act.reduce((a,r)=>a+n(r.skassists),0),gv=act.reduce((a,r)=>a+n(r.skgiveaways),0),tk=act.reduce((a,r)=>a+n(r.sktakeaways),0),bl=act.reduce((a,r)=>a+n(r.skbs),0);
-    const best=[...s.games].map(gm=>{const r=gm.rows.find(x=>x.name===p.key&&x.position!=='goalie'&&isActive(x));return r?{gm,pts:n(r.skgoals)+n(r.skassists),gv:n(r.skgiveaways)}:null}).filter(Boolean);
-    const top=[...best].sort((a,b)=>b.pts-a.pts)[0],worstGv=[...best].sort((a,b)=>b.gv-a.gv)[0];
-    const bk=benchOf(p,'giveaways'),perG=gv/act.length;
-    const mid=`${gs} goal${gs===1?'':'s'} and ${as} assist${as===1?'':'s'} in ${act.length} game${act.length>1?'s':''}${top&&top.pts>0?`, with ${top.pts} point${top.pts>1?'s':''} against ${top.gm.opp}`:''}. ${tk} takeaways, ${gv} giveaways${bk?` (${f1(perG)} a game; the 3v3 ${p.bench} average is ${f1(bk)})`:''}${p.bench==='defender'&&bl?`, ${bl} blocks`:''}.`;
-    const fix=perG>(bk||99)?`The giveaways are the topic, especially ${worstGv&&worstGv.gv>0?worstGv.gv+' against '+worstGv.gm.opp:'the ones off the first pass'}.`:`The puck care is acceptable. The next level is more takeaways than giveaways.`;
+    const gv=act.reduce((a,r)=>a+n(r.skgiveaways),0),tk=act.reduce((a,r)=>a+n(r.sktakeaways),0),bl=act.reduce((a,r)=>a+n(r.skbs),0);
+    const bk=benchOf(p,'giveaways'),perG=gv/x.gp,hot=g.grade==='A'||g.grade==='B';
+    const lead=g.grade==='A'?pick([`${short(p)} was ABSOLUTELY COOKING.`,`${short(p)} came to PLAY.`,`${short(p)} was a problem for everybody.`],h+p.key.length)
+      :g.grade==='B'?pick([`${short(p)} had a really good one.`,`${short(p)} was dialed in.`],h+p.key.length)
+      :g.grade==='C'?pick([`${short(p)} was solid, not special.`,`${short(p)} did the job, nothing more.`],h+p.key.length)
+      :pick([`${short(p)} had a night to forget.`,`${short(p)} never got going.`],h+p.key.length);
+    const prod=`${x.pts} point${x.pts===1?'':'s'} (${x.gs}G, ${x.as}A) in ${x.gp} game${x.gp>1?'s':''}${x.top&&x.top.pts>1?`, best game ${x.top.pts} against ${x.top.gm.opp}`:''}.`;
+    const crit=perG>(bk||99)?`The critique: ${gv} giveaways, ${f1(perG)} a game against a ${f1(bk)} ${p.bench} average${x.worstGv&&x.worstGv.gv>=5?`, ${x.worstGv.gv} of them against ${x.worstGv.gm.opp}`:''}. That is a meeting.`
+      :`Puck care was clean enough: ${tk} takeaways, ${gv} giveaways${bk?` (${f1(perG)} a game, ${p.bench} average ${f1(bk)})`:''}${p.bench==='defender'&&bl?`, ${bl} blocks`:''}. The next level is more takeaways than giveaways.`;
     const asg=pick([`Find the short outlet before the puck arrives, then move for the return.`,`Scan the lane first. If it is closed, chip it out and reset.`,`Keep one skater above the play and take the simple first pass.`],h+p.key.length);
-    const q=pick([`“${gs+as} points is fine. ${gv>=5?gv+' giveaways is a meeting.':'Clean it up and keep going.'}”`,`“I count ${gs+as} on the sheet. Now let me count fewer turnovers next time.”`,`“Good production. The next step is protecting the puck.”`],h+p.nick.length);
-    cards.push(`${head}\n${mid} ${fix}\nNext skate: ${asg}\n🎙️ ${q}`);
-    grades.push({p,g,pts:gs+as});
+    const q=pick([`“${x.pts} points is fine. ${gv>=5?gv+' giveaways is a meeting.':'Clean it up and keep going.'}”`,`“I count ${x.pts} on the sheet. Now let me count fewer turnovers next time.”`,`“Good production. The next step is protecting the puck.”`],h+p.nick.length);
+    cards.push(`${hd}\n${lead} ${prod}\n${crit}\nNext game: ${asg}\n🎙️ ${q}`);
+    grades.push({p,g,pts:x.pts,gs:x.gs,as:x.as});
   });
-  const stars=[...grades].sort((a,b)=>b.g.score-a.g.score).slice(0,3);
-  const star=stars.map((x,i)=>`${i+1}. ${x.p.nick.split(' ')[0]} — Night Grade ${x.g.grade}, ${x.line||x.pts+' points'}.`).join('\n');
+  const stars=[...grades].sort((u,v)=>v.g.score-u.g.score).slice(0,3);
+  const star=stars.map((u,i)=>`${i+1}. ${short(u.p)} — Night Grade ${u.g.grade}, ${u.line||`${u.pts} points (${u.gs}G, ${u.as}A)`}.`).join('\n');
   const nextItems=[];
-  const allGv=P.filter(p=>!p.isG).reduce((a,p)=>a+NR[p.key].reduce((x,r)=>x+n(r.skgiveaways),0),0),allTk=P.filter(p=>!p.isG).reduce((a,p)=>a+NR[p.key].reduce((x,r)=>x+n(r.sktakeaways),0),0);
-  if(allGv>allTk)nextItems.push('give the puck carrier a short outlet and cut the giveaways');
+  if(gvAll>tkAll)nextItems.push('give the puck carrier a short outlet and cut the giveaways');
   if(T.sf<T.sa)nextItems.push('win the shot count by keeping the puck in their end');
   if(dnfs.length)nextItems.push('finish every game we start');
   if(P.some(p=>!NR[p.key].some(r=>isActive(r)||n(r.glshots)>0)))nextItems.push('confirm the lineup before puck drop');
   while(nextItems.length<3)nextItems.push(['keep a skater above the play on every rush','hold the shot quality we are generating in the slot','answer a goal against with a shift that gets the puck deep'][nextItems.length]);
-  const intro=`THE FINKLESTEIN REPORT | ${mon}`;
-  return {night,games:s.games.length,record:rec,goals:`${T.gf}–${T.ga}`,provisional:true,auto:true,
-   summary:[head,intro,sumry,`TEAM PERFORMANCE\n${rec} · Goals ${T.gf}–${T.ga} · Goal differential ${gd>0?'+':gd<0?'−':''}${Math.abs(gd)} · Shots ${T.sf}–${T.sa}\n${gl.join('\n')}`,`PLAYER REPORT CARDS`,cards.join('\n\n'),`🌟 THREE STARS\n${star}`,`🎯 THE NEXT SKATE\n${nextItems.slice(0,3).join(', ').replace(/^./,m=>m.toUpperCase())}.`].join('\n\n')};
+  return {night,games:N,record:rec,goals:`${T.gf}–${T.ga}`,provisional:true,auto:true,
+    summary:[head,`THE FINKLESTEIN REPORT | ${mon}`,lede,`TEAM PERFORMANCE\n${rec} · Goals ${T.gf}–${T.ga} · Goal differential ${gd>0?'+':gd<0?'−':''}${Math.abs(gd)} · Shots ${T.sf}–${T.sa}\n${details}\n${lines.join('\n')}`,`PLAYER REPORT CARDS`,cards.join('\n\n'),`🌟 THREE STARS\n${star}`,`🎯 THE NEXT GAME\n${nextItems.slice(0,3).join(', ').replace(/^./,m=>m.toUpperCase())}.`].join('\n\n')};
 }
 window.AST.buildReport=night=>buildReport(night);
 
