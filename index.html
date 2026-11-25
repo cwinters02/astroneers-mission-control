@@ -1031,19 +1031,30 @@ function gameEnv(g){
   return _ag?clamp(.5+.5*teamGoals(g)/_ag,.6,1.4):1}
 /* involvement: share of our goals the player had a hand in (goal or assist), vs a typical ~55% */
 const involve=(r,g)=>{const G=teamGoals(g);return G>0?Math.min(1,(n(r.skgoals)+n(r.skassists))/G):null};
+/* own-team role averages for passing %, shooting % and penalty balance (drawn minus minors taken) */
+let _xb=null;
+function extraBench(role){
+  if(!_xb){const a={};SESS.forEach(s=>s.games.forEach(g=>g.rows.forEach(r=>{if(r.position==='goalie'||!isActive(r))return;const k=rkey(r.position);const o=a[k]=a[k]||{ps:0,pa:0,g:0,sh:0,pen:0,c:0};o.ps+=n(r.skpasses);o.pa+=n(r.skpassattempts);o.g+=n(r.skgoals);o.sh+=n(r.skshots);o.pen+=n(r.skpenaltiesdrawn)-n(r.skpim)/2;o.c++})));
+    _xb={};Object.keys(a).forEach(k=>{const o=a[k];_xb[k]={pp:o.pa?o.ps/o.pa:0,sp:o.sh?o.g/o.sh:0,pen:o.c?o.pen/o.c:0}})}
+  return _xb[role]||{pp:0,sp:0,pen:0}}
+const winOf=g=>g.res?(g.res.w?1:g.res.ot?0:-1):null;
 /* items: [{r, b:{goals,assists,takeaways,giveaways,blocks}}] -> signal in [-1,1] or null */
 function skaterSignal(items){
   if(!items.length)return null;
-  const T={a:0,e:0,ta:0,eta:0,gv:0,egv:0,bl:0,ebl:0,g:0,as:0,ch:0,ech:0,iv:0,eiv:0};
+  const T={a:0,e:0,ta:0,eta:0,gv:0,egv:0,bl:0,ebl:0,g:0,as:0,ch:0,ech:0,iv:0,eiv:0,w:0,nw:0,ps:0,pa:0,eps:0,gl:0,sh:0,egp:0,pen:0,epen:0,cnt:0};
   items.forEach(it=>{const {r,b}=it;T.a+=4*n(r.skgoals)+3*n(r.skassists);T.e+=(4*b.goals+3*b.assists)*(it.f||1);
-    if(it.iv!=null){T.iv+=it.iv;T.eiv+=.55;}T.ch+=chanceVal(r)*(it.sw||1);T.ech+=chanceBench(it.role);T.ta+=n(r.sktakeaways);T.eta+=b.takeaways;T.gv+=n(r.skgiveaways);T.egv+=b.giveaways;T.bl+=n(r.skbs);T.ebl+=b.blocks});
+    if(it.iv!=null){T.iv+=it.iv;T.eiv+=.55;}const X=extraBench(it.role);T.cnt++;if(it.w!=null){T.w+=it.w;T.nw++}T.ps+=n(r.skpasses);T.pa+=n(r.skpassattempts);T.eps+=X.pp*n(r.skpassattempts);T.gl+=n(r.skgoals);T.sh+=n(r.skshots);T.egp+=X.sp*n(r.skshots);T.pen+=n(r.skpenaltiesdrawn)-n(r.skpim)/2;T.epen+=X.pen;T.ch+=chanceVal(r)*(it.sw||1);T.ech+=chanceBench(it.role);T.ta+=n(r.sktakeaways);T.eta+=b.takeaways;T.gv+=n(r.skgiveaways);T.egv+=b.giveaways;T.bl+=n(r.skbs);T.ebl+=b.blocks});
   const rel=(x,e)=>e>0?clamp((x-e)/e/.60,-1,1):null;
   const sc=rel(T.a,T.e),ta=rel(T.ta,T.eta);
   const bl=rel(T.bl,T.ebl);const chn=rel(T.ch,T.ech),inv=rel(T.iv,T.eiv);
+  const win=T.nw?clamp(T.w/T.nw,-1,1):null;
+  const pas=T.pa>=8?clamp((T.ps-T.eps)/T.pa/.12,-1,1):null;
+  const shp=T.sh>0?clamp(((T.gl+3*(T.egp/Math.max(1,T.sh)))/(T.sh+3)-T.egp/T.sh)/.12,-1,1):null;
+  const pen=T.cnt?clamp((T.pen-T.epen)/(T.cnt*1.5),-1,1):null;
   const ar=T.gv/Math.max(1,T.a),er=T.e>0?T.egv/Math.max(1,T.e):null;
   const gv=er?clamp((er-ar)/er/.60,-1,1):null;
   const defense=items[0].role==='defender';
-  const W=defense?[[sc,.30],[inv,.05],[chn,.10],[ta,.30],[bl,.10],[gv,.15]]:[[sc,.42],[inv,.08],[chn,.15],[ta,.20],[gv,.15]];
+  const W=defense?[[sc,.24],[inv,.04],[chn,.08],[ta,.20],[bl,.08],[gv,.12],[win,.10],[pas,.06],[shp,.02],[pen,.06]]:[[sc,.33],[inv,.06],[chn,.12],[ta,.15],[gv,.12],[win,.08],[pas,.04],[shp,.04],[pen,.06]];
   let w=0,s=0;W.forEach(([v,x])=>{if(v!=null){w+=x;s+=v*x}});
   if(w<.5)return null;
   return s/w;
@@ -1071,7 +1082,7 @@ function computeGrades(){
       }
       const act=rows.filter(r=>r.position!=='goalie'&&isActive(r));
       if(!act.length)return;
-      const lg=act.map(r=>({r,b:B[rkey(r.position)],role:rkey(r.position),f:rowF.get(r)||1,sw:slotMult(p.key),iv:involve(r,rowG.get(r))})).filter(x=>x.b);
+      const lg=act.map(r=>({r,b:B[rkey(r.position)],role:rkey(r.position),f:rowF.get(r)||1,sw:slotMult(p.key),iv:involve(r,rowG.get(r)),w:winOf(rowG.get(r))})).filter(x=>x.b);
       const league=skaterSignal(lg);
       if(league==null)return;
       /* personal: strictly earlier nights */
@@ -1319,7 +1330,7 @@ function overallAt(p,night){
   if(p.isG){let sh=0,sv=0,c=0;SESS.forEach(s=>{if(!/^\d{4}/.test(s.key)||s.key>night)return;s.games.forEach(g=>g.rows.forEach(r=>{if(r.name===p.key&&r.position==='goalie'&&n(r.glshots)>0){sh+=n(r.glshots);sv+=n(r.glsaves);c++}}))});
     if(c<3||!sh)return null;return clamp(Math.round(70+25*clamp((sv/sh-.704)/.12,-1,1)),25,99)}
   const B=(M.gradingBenchmarks&&M.gradingBenchmarks.roles)||{};const items=[];
-  SESS.forEach(s=>{if(!/^\d{4}/.test(s.key)||s.key>night)return;s.games.forEach(g=>{const f=gameCtx(g).f*gameEnv(g);g.rows.forEach(r=>{if(r.name===p.key&&r.position!=='goalie'&&isActive(r)&&B[rkey(r.position)])items.push({r,b:B[rkey(r.position)],role:rkey(r.position),f,sw:slotMult(p.key),iv:involve(r,g)})})})});
+  SESS.forEach(s=>{if(!/^\d{4}/.test(s.key)||s.key>night)return;s.games.forEach(g=>{const f=gameCtx(g).f*gameEnv(g);g.rows.forEach(r=>{if(r.name===p.key&&r.position!=='goalie'&&isActive(r)&&B[rkey(r.position)])items.push({r,b:B[rkey(r.position)],role:rkey(r.position),f,sw:slotMult(p.key),iv:involve(r,g),w:winOf(g)})})})});
   if(items.length<3)return null;const sg=skaterSignal(items);return sg==null?null:clamp(Math.round(70+25*sg),25,99);
 }
 const hash=s=>[...String(s)].reduce((a,c)=>(a*31+c.charCodeAt(0))>>>0,7);
