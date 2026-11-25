@@ -13,7 +13,7 @@ const todo = Object.keys(byNight).sort().reverse().slice(0, 2).filter(n => {
   const gs = byNight[n], newest = Math.max(...gs.map(g => g.ts || 0));
   if (now - newest < 3600) return false;
   const have = R.reports.find(r => r.night === n);
-  return !have || (have.auto && have.games !== gs.length);
+  return process.env.REGEN_AUTO&&have&&have.auto||!have || (have.auto && have.games !== gs.length);
 });
 if (!todo.length) { console.log('reports: nothing to write'); process.exit(0); }
 const srv = http.createServer((q, r) => { let p = q.url.split('?')[0]; if (p === '/') p = '/index.html';
