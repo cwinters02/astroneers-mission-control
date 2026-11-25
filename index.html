@@ -846,7 +846,7 @@ function playerZones(p,mode){
   const tot=Object.values(sh).reduce((a,b)=>a+n(b),0);
   const top=Object.keys(sh).map(Number).sort((a,b)=>n(sh[b])-n(sh[a]))[0];
   return `<div class="col2" style="align-items:center"><div>${zoneMap(sh,gl,mode)}</div><div>
-    <div class="eyebrow" style="margin-bottom:8px">Where the puck goes on the net</div>${netMap(ns,ng)}
+    <div class="eyebrow" style="margin-bottom:8px">${p.isG?'Where the puck goes in the net':'Where the puck goes on the net'}</div>${netMap(ns,ng)}
     <p class="small muted" style="margin:12px 0 0">${tot?`${f0(tot)} tracked shots. ${p.isG?'Most shots against come from':'Favorite spot:'} <b style="color:var(--ink)">${ZNAME[top]}</b> (${f1(n(sh[top])/tot*100)}% of shots).`:''}</p></div></div>`;
 }
 function vPlayers(){
