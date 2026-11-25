@@ -1,0 +1,56 @@
+name: Update stats
+
+# Pulls the newest games from ChelHead, merges them, writes the morning report draft, and pushes to main.
+# Times are UTC: 01:13-07:13 covers 9:13 PM to 2:13 AM Eastern in winter (and 8:13 PM to 3:13 AM in summer).
+# The 15:13 run catches anything missed overnight, because ChelHead only keeps the newest ~10 games.
+on:
+  schedule:
+    - cron: '13 1-7 * * *'
+    - cron: '13 15 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+
+concurrency:
+  group: stats-update
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Pull ChelHead feed
+        run: node tools/pull_feed_node.cjs "$RUNNER_TEMP/feed.json"
+      - name: Merge into the site data
+        run: node tools/update.cjs "$RUNNER_TEMP/feed.json" .
+      - name: Install a headless browser for the report and smoke test
+        run: |
+          npm install --no-save playwright@1.49.1
+          npx playwright install --with-deps chromium
+      - name: Write the morning report draft
+        run: NODE_PATH="$PWD/node_modules" node tools/gen_report.cjs .
+      - name: Smoke test
+        run: NODE_PATH="$PWD/node_modules" node tests/smoke.cjs .
+      - name: Commit and push
+        id: push
+        run: |
+          if [ -z "$(git status --porcelain)" ]; then echo "nothing changed"; exit 0; fi
+          git config user.name "Astroneers update bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add -A
+          git commit -m "Nightly update (GitHub Actions)"
+          git pull --rebase origin main
+          git push origin HEAD:main
+          echo "pushed=1" >> "$GITHUB_OUTPUT"
+      - name: Rebuild the Pages site
+        if: steps.push.outputs.pushed == '1'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api -X POST "repos/${{ github.repository }}/pages/builds"

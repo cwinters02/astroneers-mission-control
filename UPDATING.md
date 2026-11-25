@@ -21,3 +21,6 @@ Smoke test (needs Playwright): `NODE_PATH=$(npm root -g) node tests/smoke.cjs .`
 
 ## Nightly auto-update
 A scheduled task runs the pull, merge, report and smoke test, then pushes to `main`. It needs the owner's Mac awake with Chrome and the Claude extension signed in. ChelHead's overall ratings, insights and archetypes are not refreshed by this routine.
+
+## Automatic updates without the Mac (GitHub Actions)
+`.github/workflows/update.yml` runs on GitHub's servers every hour from about 9 PM to 2 AM Eastern, plus one catch-up run at about 10 AM. It runs `tools/pull_feed_node.cjs` (the same pull as `pull_feed.js`, but without a browser), `update.cjs`, `gen_report.cjs` and the smoke test, then pushes to `main`. Run it by hand from the repo's Actions tab with "Run workflow". If ChelHead refuses requests from GitHub's servers, the run fails at the first step and the Mac routine above is the fallback.
