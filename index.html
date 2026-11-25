@@ -67,6 +67,7 @@ a{color:inherit}
 .pill.l{background:rgba(236,68,61,.18);color:var(--badText)}
 .pill.w{background:rgba(99,166,221,.18);color:var(--goodText)}
 .chips{display:flex;gap:6px;flex-wrap:wrap}
+.askLog{max-height:260px;overflow:auto;display:flex;flex-direction:column;gap:6px}.askm{display:flex}.askm.u{justify-content:flex-end}.askm span{max-width:88%;padding:8px 11px;border-radius:12px;font-size:13px;line-height:1.45}.askm.u span{background:var(--accent,#63a6dd);color:#0b1520}.askm.c span{background:rgba(127,150,180,.18)}
 .recap{white-space:pre-wrap;word-break:break-word;font:13px/1.5 inherit;font-family:inherit;background:var(--chip);border-radius:12px;padding:14px;margin:0;max-height:420px;overflow:auto;color:var(--body)}
 .chip{border:0;background:var(--chip);padding:8px 14px;border-radius:999px;font-size:12.5px;white-space:nowrap;min-height:36px;display:inline-flex;align-items:center;gap:7px}
 .chip[aria-pressed=true]{background:var(--solid);color:#fff}
@@ -807,6 +808,79 @@ function recapText(rep){
   lines.push('');lines.push('📊 '+SITE_URL);
   return lines.join('\n').replace(/\n{3,}/g,'\n\n').trim()+'\n';
 }
+/* ---------- ASK COACH: answers from the site's own data, no outside service ---------- */
+const ASK_TIPS={'Scoring':'Get to the slot and finish what you start. One more shot on net each game.','Goal involvement':'Be on the ice for goals: support the puck and go to the net.','Scoring chances':'Shoot from the slot and the crease, tip pucks, screen the goalie.','Takeaways':'Stick on stick, cut passing lanes, be first to loose pucks.','Blocks':'Get in lanes and block more shots.','Puck care':'Chip it deep instead of forcing the middle. Take the simple first pass.','Win bonus':'Wins move the grade. Finish games and play to the horn.','Passing %':'Find the short outlet, make the safe pass first.','Shooting %':'Pick your spots, put it on net before you shoot from the perimeter.','Penalties':'Stay out of the box and draw penalties by keeping your feet moving.','Save %':'Control rebounds and track the puck all the way in.','Saves above average':'Stay square and cut off the high-danger shots.','Goals against':'Talk to the D so we clear the slot.','Special saves':'Stay patient on breakaways and desperation chances.','Pokechecks':'Use the poke check when the shooter is too close to read.','Shutout':'Nothing to fix, just keep the door closed.'};
+const ASK_SUGG=['How was last night?','Why is Flappy a C?','What should Moose work on?','How many goals does Moose have?','Who was the star last night?','How do grades work?','Gumbo save percentage','What is our next game focus?'];
+function askFindPlayer(q){q=q.toLowerCase();return P.find(p=>q.includes(p.nick.split(' ')[0].toLowerCase())||q.includes(p.key.replace('astroneer_','')))||null}
+function askLastGrade(p){const G=computeGrades();for(let i=G.length-1;i>=0;i--){if(G[i].rows[p.key])return {night:G[i].night,row:G[i].rows[p.key],G,i}}return null}
+function askParts(row){const ps=[...(row.parts||[])].map(x=>({l:x.l,pts:x.v*x.w*25})).sort((a,b)=>b.pts-a.pts);return {best:ps.filter(x=>x.pts>0.5).slice(0,2),worst:ps.filter(x=>x.pts<-0.5).slice(-2).reverse(),ps}}
+function askSign(x){return (x>=0?'+':'')+x.toFixed(1)}
+function askGradeWhy(p){
+  const g=askLastGrade(p);if(!g)return `${p.nick} has no graded night yet.`;
+  const {best,worst}=askParts(g.row);const ov=overallAt(p,g.night);
+  let t=`${p.nick}: night of ${shortDay(g.night)} was a ${g.row.grade} (${g.row.score})${ov!=null?`, Overall ${ov}`:''}. ${g.row.detail}.`;
+  if(best.length)t+=` Helped most: ${best.map(x=>`${x.l.toLowerCase()} (${askSign(x.pts)})`).join(', ')}.`;
+  if(worst.length)t+=` Held it back: ${worst.map(x=>`${x.l.toLowerCase()} (${askSign(x.pts)})`).join(', ')}.`;
+  if(worst.length)t+=` To move it up: ${ASK_TIPS[worst[0].l]||''}`;
+  return t}
+function askWork(p){
+  const g=askLastGrade(p);if(!g)return `No graded night for ${p.nick} yet.`;
+  const {worst}=askParts(g.row);
+  if(!worst.length)return `${p.nick} had nothing below average last time. Keep doing the same things and stay consistent.`;
+  return `${p.nick}, top things to work on: ${worst.map((x,i)=>`${i+1}) ${x.l} (${askSign(x.pts)}): ${ASK_TIPS[x.l]||''}`).join(' ')}`}
+function askStat(p,q){
+  const L=q.toLowerCase();
+  if(p.isG){
+    if(/save|sv/.test(L))return `${p.nick} career: ${f0(p.sv)} saves on ${f0(p.sa)} shots, ${f1(p.svp)}%.`;
+    if(/against|gaa|allow/.test(L))return `${p.nick} career: ${f0(p.ga)} goals against, ${f2(p.gaa)} a game.`;
+    if(/shutout|so\b/.test(L))return `${p.nick} has ${f0(p.so)} shutouts.`;
+    if(/win|record/.test(L))return `${p.nick} is ${f0(p.glw)}-${f0(p.gll)}${n(p.glotl)?'-'+f0(p.glotl):''} in net.`;
+    return `${p.nick} career: ${f1(p.svp)}% on ${f0(p.sa)} shots, ${f0(p.ga)} goals against, ${f0(p.so)} shutouts.`}
+  const m=[[/goal(?!s? against)/,`${f0(p.g)} goals (${f2(p.gpg)} a game)`],[/assist/,`${f0(p.a)} assists (${f2(p.apg)} a game)`],[/point|pts/,`${f0(p.pts)} points in ${f0(p.gp)} games (${f2(p.ppg)} a game)`],[/shot/,`${f0(p.shots)} shots (${f1(p.spg)} a game, ${f1(p.shp)}% shooting)`],[/hit/,`${f0(p.hits)} hits (${f1(p.hpg)} a game)`],[/block/,`${f0(p.bs)} blocked shots (${f1(p.bpg)} a game)`],[/takeaway/,`${f0(p.tk)} takeaways (${f1(p.tkpg)} a game)`],[/giveaway|turnover/,`${f0(p.gv)} giveaways (${f1(p.gvpg)} a game)`],[/pass/,`${f1(p.pass)}% passing`],[/faceoff|face off/,`${f1(p.fo)}% on faceoffs`],[/penalt|pim/,`${f0(p.pim)} penalty minutes, ${f0(p.pd)} penalties drawn`]];
+  const hit=m.find(([r])=>r.test(L));
+  if(hit)return `${p.nick} career: ${hit[1]}.`;
+  return `${p.nick} career: ${f0(p.g)} G, ${f0(p.a)} A, ${f0(p.pts)} points in ${f0(p.gp)} games, ${f0(p.tk)} takeaways and ${f0(p.gv)} giveaways.`}
+function askLastNight(){
+  const G=computeGrades();if(!G.length)return 'No games on record yet.';
+  const g=G[G.length-1],s=SESS.find(x=>x.key===g.night);
+  const lines=s?s.games.map(x=>`${x.res.w?'W':x.res.ot?'OTL':'L'} ${x.us}-${x.th} vs ${x.opp}`):[];
+  const rows=P.filter(p=>g.rows[p.key]).sort((a,b)=>g.rows[b.key].score-g.rows[a.key].score).map(p=>`${p.nick} ${g.rows[p.key].grade}`);
+  return `Night of ${shortDay(g.night)}: ${g.record}. ${lines.join('; ')}. Grades: ${rows.join(', ')}.`}
+function askStar(){
+  const G=computeGrades();if(!G.length)return 'No games yet.';const g=G[G.length-1];
+  const r=P.filter(p=>g.rows[p.key]).sort((a,b)=>g.rows[b.key].score-g.rows[a.key].score);
+  return `Top of ${shortDay(g.night)}: ${r.slice(0,3).map((p,i)=>`${i+1}. ${p.nick} (${g.rows[p.key].grade}, ${g.rows[p.key].score})`).join(' ')}.`}
+function askNext(){
+  const reps=(R&&R.reports)||[];const rep=reps[0];if(!rep)return 'No report yet.';
+  const pr=parseReport(rep.summary);return pr.next?`Next game focus: ${pr.next}`:'Keep the puck moving and cut the giveaways.'}
+function askHow(){return 'Each night grade compares you with the average player in your role: scoring, goal involvement, scoring chances (shots and tips, with extra credit for slot shooters), takeaways, giveaways, blocks for D, win bonus, passing %, shooting % and penalties. Goalies get save %, saves above average, goals against, special saves, pokechecks, win bonus and shutouts. Games where we score less count for less, and tougher opponents earn more credit. Letters: A 90+, B 80s, C 70s, D 60s, F under 60.'}
+function askOpp(){
+  const G=computeGrades();const g=G[G.length-1];const s=g&&SESS.find(x=>x.key===g.night);if(!s)return 'No games yet.';
+  const c=s.games.map(x=>({x,c:gameCtx(x)})).filter(y=>y.c.od!=null).sort((a,b)=>a.c.od-b.c.od)[0];
+  return c?`Toughest opponent last night: ${c.x.opp} (Div ${c.c.od}, we are Div ${c.c.ud}). Div 1 is the best.`:'No division info on last night\'s opponents.'}
+function askSlot(){const z=goalieBench().zone;const n0=coachNotes().find(x=>/slot/i.test(x.title));return (n0?n0.body+' ':'')+(z&&z.slotSv!=null?`Gumbo stops ${f1(z.slotSv*100)}% from the slot vs ${f1(z.outSv*100)}% from the perimeter.`:'')}
+function coachAnswer(q){
+  q=String(q||'').trim();if(!q)return '';
+  const L=q.toLowerCase(),p=askFindPlayer(L);
+  if(/how (do|does|are)\b.*(grade|graded|rating|rated|work|calculat)|grading|how .*grade/.test(L)&&!p)return askHow();
+  if(p&&/(why|how come|explain|what.*(grade|rating)|grade)/.test(L)&&!/(goal|assist|point|shot|hit|block)s?\b/.test(L.replace(/grade/g,'')))return askGradeWhy(p);
+  if(/(work on|improve|better|fix|tips?|advice|get better|raise)/.test(L)){if(p)return askWork(p);return askNext()}
+  if(/(star|mvp|best|top player|who won)/.test(L)&&!p)return askStar();
+  if(/(last night|last game|yesterday|how.*(we|did|was)|record|result)/.test(L)&&!p)return askLastNight();
+  if(/(next game|focus|plan)/.test(L))return askNext();
+  if(/(slot|high danger|shot map|where.*(score|goals)|location)/.test(L))return askSlot();
+  if(/(opponent|opp|division|div\b|toughest|hardest)/.test(L))return askOpp();
+  if(p)return /(grade|rating|overall|ovr)/.test(L)?askGradeWhy(p):askStat(p,L);
+  if(/(team|club).*(goal|record)|how many (wins|games)/.test(L)){const T=tally(SESS.flatMap(x=>x.games));return `Tracked record: ${T.w}-${T.l}${T.o?'-'+T.o:''}, goals ${T.gf}-${T.ga}.`}
+  return `I can answer questions about grades, stats and last night. Try: "${ASK_SUGG.slice(0,4).join('", "')}".`}
+function askCard(){
+  const log=(S.askLog||[]).map(m=>`<div class="askm ${m.who}"><span>${esc(m.t)}</span></div>`).join('');
+  return `<section class="card s4" id="cAsk"><div class="h"><h2>Ask Coach</h2><span class="pill i">From the box scores</span></div>
+   <p class="small muted" style="margin:0 0 10px">Ask about your grade, your stats, last night or what to work on. Answers come from the site's data, so it won't know anything that isn't in the box scores.</p>
+   <div class="askLog" aria-live="polite">${log||'<p class="small muted" style="margin:0">Tap a question or type your own.</p>'}</div>
+   <div class="chips" style="margin:10px 0">${ASK_SUGG.map(x=>`<button class="chip" data-ask="${esc(x)}">${esc(x)}</button>`).join('')}</div>
+   <form id="askForm" style="display:flex;gap:8px"><input id="askq" type="text" autocomplete="off" placeholder="Ask Coach…" value="" style="flex:1;min-width:0;padding:10px 12px;border-radius:10px;border:1px solid var(--line,#34445a);background:var(--card,transparent);color:inherit;font:inherit"><button class="chip" type="submit" data-askgo="1" aria-pressed="true">Ask</button></form></section>`}
+function askSubmit(q){q=String(q||'').trim();if(!q)return;S.askLog=(S.askLog||[]).concat([{who:'u',t:q},{who:'c',t:coachAnswer(q)}]).slice(-12);render(true);const l=document.querySelector('#cAsk .askLog');if(l)l.scrollTop=l.scrollHeight;const c=document.getElementById('cAsk');if(c)c.scrollIntoView({block:'nearest'})}
 function recapCard(rep){
   const t=recapText(rep);if(!t)return '';
   return `<section class="card s2" id="cRecap"><div class="h"><h2>Text for the team</h2><span class="pill i">Copy and send</span></div>
@@ -825,6 +899,7 @@ function vCoach(){
   <div class="grid">
    <section class="card s2"><div class="h"><h2>Morning report</h2>${sel}</div>${coachBlock(rep,false)}</section>
    ${recapCard(rep)}
+   ${askCard()}
    <section class="card s2"><div class="h"><h2>Report cards</h2><span class="pill i">Tap a player</span></div>${p&&p.players.length?reportCards(p):'<p class="empty">No player grades in this report.</p>'}</section>
    <section class="card s4"><div class="h"><h2>What the numbers say</h2><span class="pill">Career totals</span></div><div class="col2">${notes.map(insRow).join('')}</div></section>
    ${ch.length?`<section class="card s4"><div class="h"><h2>ChelHead insights</h2><span class="pill">Via ChelHead</span></div><div class="col2">${ch.map(i=>insRow({tone:i.trend==='down'?'bad':'good',title:nickText(i.title),metric:i.metric,value:i.value,body:nickText(i.body||'')})).join('')}</div></section>`:''}
@@ -1079,7 +1154,7 @@ function extraBench(role){
   return _xb[role]||{pp:0,sp:0,pen:0}}
 const winOf=g=>g.res?(g.res.w?1:g.res.ot?0:-1):null;
 /* items: [{r, b:{goals,assists,takeaways,giveaways,blocks}}] -> signal in [-1,1] or null */
-function skaterSignal(items){
+function skaterSignal(items,out){
   if(!items.length)return null;
   const T={a:0,e:0,ta:0,eta:0,gv:0,egv:0,bl:0,ebl:0,g:0,as:0,ch:0,ech:0,iv:0,eiv:0,w:0,nw:0,ps:0,pa:0,eps:0,gl:0,sh:0,egp:0,pen:0,epen:0,cnt:0};
   items.forEach(it=>{const {r,b}=it;T.a+=4*n(r.skgoals)+3*n(r.skassists);T.e+=(4*b.goals+3*b.assists)*(it.f||1);
@@ -1094,9 +1169,10 @@ function skaterSignal(items){
   const ar=T.gv/Math.max(1,T.a),er=T.e>0?T.egv/Math.max(1,T.e):null;
   const gv=er?clamp((er-ar)/er/.60,-1,1):null;
   const defense=items[0].role==='defender';
-  const W=defense?[[sc,.24],[inv,.04],[chn,.08],[ta,.20],[bl,.08],[gv,.12],[win,.10],[pas,.06],[shp,.02],[pen,.06]]:[[sc,.33],[inv,.06],[chn,.12],[ta,.15],[gv,.12],[win,.08],[pas,.04],[shp,.04],[pen,.06]];
+  const W=defense?[[sc,.24,'Scoring'],[inv,.04,'Goal involvement'],[chn,.08,'Scoring chances'],[ta,.20,'Takeaways'],[bl,.08,'Blocks'],[gv,.12,'Puck care'],[win,.10,'Win bonus'],[pas,.06,'Passing %'],[shp,.02,'Shooting %'],[pen,.06,'Penalties']]:[[sc,.33,'Scoring'],[inv,.06,'Goal involvement'],[chn,.12,'Scoring chances'],[ta,.15,'Takeaways'],[gv,.12,'Puck care'],[win,.08,'Win bonus'],[pas,.04,'Passing %'],[shp,.04,'Shooting %'],[pen,.06,'Penalties']];
   let w=0,s=0;W.forEach(([v,x])=>{if(v!=null){w+=x;s+=v*x}});
   if(w<.5)return null;
+  if(out)W.forEach(([v,x,l])=>{if(v!=null)out.push({l,v,w:x/w})});
   return s/w;
 }
 /* dynamic goalie benchmark: pools opposing goalies' results against us (team shots/goals) with our own goalie's games,
@@ -1126,7 +1202,7 @@ function goalieBench(){
   _gb={sv,zone:zInfo,ga:tn?tg/tn:3,pk:(pk+1.5*5)/(gN+5),sp:(sp+.5*5)/(gN+5),shots:oSh+gSh,games:gN};
   return _gb}
 /* goalie signal: items [{r,g}] -> [-1,1]. save %, saves above average (volume at a good %), goals against, special saves, pokechecks, win, shutout */
-function goalieSignal(items,B){
+function goalieSignal(items,B,out){
   const GB=goalieBench(),base=GB.sv;
   let sh=0,sv=0,ga=0,sp=0,pk=0,w=0,nw=0,so=0;const c=items.length;
   items.forEach(({r,g})=>{sh+=n(r.glshots);sv+=n(r.glsaves);ga+=n(r.glga);sp+=n(r.glbrksaves)+n(r.glpensaves)+n(r.gldsaves);pk+=n(r.glpokechecks);const x=g?winOf(g):null;if(x!=null){w+=x;nw++}so+=n(r.glso)>0?1:0});
@@ -1136,8 +1212,9 @@ function goalieSignal(items,B){
   const gag=clamp((GB.ga-ga/c)/GB.ga,-1,1);
   const spc=clamp((sp/c-GB.sp)/1.5,-1,1);
   const pkc=clamp((pk/c-GB.pk)/3,-1,1);
-  const W=[[svp,.45],[gsaa,.15],[gag,.10],[spc,.05],[pkc,.05],[nw?clamp(w/nw,-1,1):null,.15],[so?1:null,.05]];
-  let tw=0,ts=0;W.forEach(([v,x])=>{if(v!=null){tw+=x;ts+=v*x}});return ts/tw}
+  const W=[[svp,.45,'Save %'],[gsaa,.15,'Saves above average'],[gag,.10,'Goals against'],[spc,.05,'Special saves'],[pkc,.05,'Pokechecks'],[nw?clamp(w/nw,-1,1):null,.15,'Win bonus'],[so?1:null,.05,'Shutout']];
+  let tw=0,ts=0;W.forEach(([v,x])=>{if(v!=null){tw+=x;ts+=v*x}});
+  if(out)W.forEach(([v,x,l])=>{if(v!=null)out.push({l,v,w:x/tw})});return ts/tw}
 function computeGrades(){
   const rowF=new Map(),rowG=new Map();
   const B=(M.gradingBenchmarks&&M.gradingBenchmarks.roles)||{};
@@ -1153,16 +1230,16 @@ function computeGrades(){
         const gr=rows.filter(r=>r.position==='goalie'&&n(r.glshots)>0);
         if(!gr.length)return;
         const sh=gr.reduce((a,r)=>a+n(r.glshots),0),sv=gr.reduce((a,r)=>a+n(r.glsaves),0);
-        const sig=goalieSignal(gr.map(r=>({r,g:rowG.get(r)})),B)??0;
+        const parts=[];const sig=goalieSignal(gr.map(r=>({r,g:rowG.get(r)})),B,parts)??0;
         const score=clamp(Math.round(78+25*sig),0,99);
-        res.rows[p.key]={score,grade:letter(score),n:gr.length,prov:gr.length<5,detail:`${sv} saves on ${sh} shots (${(sv/sh*100).toFixed(1)}%)`,personal:null};
+        res.rows[p.key]={score,grade:letter(score),n:gr.length,prov:gr.length<5,detail:`${sv} saves on ${sh} shots (${(sv/sh*100).toFixed(1)}%)`,personal:null,parts};
         hist[p.key].push({goalie:true,sv,sh});
         return;
       }
       const act=rows.filter(r=>r.position!=='goalie'&&isActive(r));
       if(!act.length)return;
       const lg=act.map(r=>({r,b:B[rkey(r.position)],role:rkey(r.position),f:rowF.get(r)||1,sw:slotMult(p.key),iv:involve(r,rowG.get(r)),w:winOf(rowG.get(r))})).filter(x=>x.b);
-      const league=skaterSignal(lg);
+      const parts=[];const league=skaterSignal(lg,parts);
       if(league==null)return;
       /* personal: strictly earlier nights */
       const prior=hist[p.key].filter(x=>!x.goalie);
@@ -1175,14 +1252,14 @@ function computeGrades(){
       const blend=pers==null?league:.8*league+.2*pers;
       const score=clamp(Math.round(78+25*blend),0,99);
       const tot=act.reduce((a,r)=>({g:a.g+n(r.skgoals),a:a.a+n(r.skassists),t:a.t+n(r.sktakeaways),v:a.v+n(r.skgiveaways)}),{g:0,a:0,t:0,v:0});
-      res.rows[p.key]={score,grade:letter(score),n:act.length,prov:act.length<5,detail:`${tot.g} G, ${tot.a} A, ${tot.t} takeaways, ${tot.v} giveaways in ${act.length} games`,personal:src};
+      res.rows[p.key]={score,grade:letter(score),n:act.length,prov:act.length<5,detail:`${tot.g} G, ${tot.a} A, ${tot.t} takeaways, ${tot.v} giveaways in ${act.length} games`,personal:src,parts};
       act.forEach(r=>hist[p.key].push({r}));
     });
     if(Object.keys(res.rows).length){res.record=recText(tally(s.games));res.games=s.games.length;out.push(res)}
   });
   return out;
 }
-window.AST={computeGrades:()=>computeGrades(),gb:()=>goalieBench()};
+window.AST={computeGrades:()=>computeGrades(),ask:q=>coachAnswer(q),gb:()=>goalieBench()};
 
 /* ---------- STAT SCOPE: last 5 (default), last 10, career ---------- */
 S.scope='l5';
@@ -1412,6 +1489,7 @@ function overallAt(p,night){
   SESS.forEach(s=>{if(!/^\d{4}/.test(s.key)||s.key>night)return;s.games.forEach(g=>{const f=gameCtx(g).f*gameEnv(g);g.rows.forEach(r=>{if(r.name===p.key&&r.position!=='goalie'&&isActive(r)&&B[rkey(r.position)])items.push({r,b:B[rkey(r.position)],role:rkey(r.position),f,sw:slotMult(p.key),iv:involve(r,g),w:winOf(g)})})})});
   if(items.length<3)return null;const sg=skaterSignal(items);return sg==null?null:clamp(Math.round(70+25*sg),25,99);
 }
+const GRADING_VERSION='v6';/* bump whenever grading rules change so the auto reports rebuild */
 const hash=s=>[...String(s)].reduce((a,c)=>(a*31+c.charCodeAt(0))>>>0,7);
 function buildReport(night){
   const s=SESS.find(x=>x.key===night);if(!s)return null;
@@ -1425,7 +1503,7 @@ function buildReport(night){
   const wl=g=>g.res.w?'W':'L';
   const score=g=>`${g.us}–${g.th}`;
   const ctxs=s.games.map(g=>gameCtx(g));
-  const lines=s.games.map((g,k)=>{const c=ctxs[k];return `${g.res.code==='W'||g.res.w?'W':g.res.ot?'OTL':'L'} ${score(g)}${g.res.ot?' (OT)':''}${g.m.dnf?', DNF':''} vs. ${g.opp}${c.od!=null?` (Div ${c.od})`:''}`});
+  const lines=s.games.map((g,k)=>{const c=ctxs[k];return `${g.res.code==='W'||g.res.w?'W':g.res.ot?'OTL':'L'} ${score(g)}${g.res.ot?' (OT)':''}${g.m.dnf?', DNF':''} vs. ${g.opp}${c.od!=null?` (Div ${c.od})`:' (Div unknown)'}`});
   /* skater production for the night */
   const sk=P.filter(p=>!p.isG).map(p=>{const act=NR[p.key].filter(r=>r.position!=='goalie'&&isActive(r));
     const gs=act.reduce((x,r)=>x+n(r.skgoals),0),as=act.reduce((x,r)=>x+n(r.skassists),0);
@@ -1601,6 +1679,10 @@ function reportGradeMap(){
   return m;
 }
 function gradeChip(g,sm){return `<span class="grade ${gcls(g)}" style="${sm?'display:inline-grid;width:32px;height:32px;font-size:14px':''}">${esc(g)}</span>`}
+function gbreak(parts){
+  if(!parts||!parts.length)return '';
+  const rows=[...parts].map(x=>({l:x.l,pts:x.v*x.w*25,w:x.w})).sort((a,b)=>b.pts-a.pts);
+  return `<details class="fold" style="margin-top:10px"><summary><span>How that night was graded</span></summary><div class="tscroll" style="margin-top:8px"><table><thead><tr><th>Part</th><th>Weight</th><th>Points vs average</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${esc(r.l)}</td><td class="num">${Math.round(r.w*100)}%</td><td class="num">${r.pts>=0?'+':''}${r.pts.toFixed(1)}</td></tr>`).join('')}</tbody></table></div><p class="small muted" style="margin:8px 0 0">Each part is scored against the league or team average for the role, then weighted. Plus means above average, minus below.</p></details>`}
 function vRatings(){
   const G=computeGrades(),RG=reportGradeMap();
   const nightLetter=(night,p)=>RG[night]?.[p.key]?.grade||G.find(x=>x.night===night)?.rows[p.key]?.grade;
@@ -1610,9 +1692,9 @@ function vRatings(){
     let latest=null,when=null;for(let i=G.length-1;i>=0;i--){if(G[i].rows[p.key]){latest=G[i].rows[p.key];when=G[i].night;break}}
     let rov=null;Object.keys(RG).sort().forEach(k=>{if(RG[k][p.key]&&RG[k][p.key].overall!=null)rov=RG[k][p.key].overall});
     const sat=lastNight&&when!==lastNight.night;
-    return `<section class="card s2"><div class="h" style="margin-bottom:10px"><div style="display:flex;gap:10px;align-items:center;min-width:0"><span class="cdot" style="background:${p.color};width:12px;height:12px"></span><div style="min-width:0"><h2 style="font-size:16px">${esc(p.nick)}</h2><div class="small muted">${esc(p.role)}${p.style?' · '+esc(p.style):''}</div></div></div>${latest?gradeChip(nightLetter(when,p)):''}</div>
-     <div class="stats"><div class="stat"><div class="k">Astroneers Overall</div><div class="v num">${rov!=null?rov:'–'}</div></div></div>
-     <p class="small muted" style="margin:10px 0 0">${latest?esc(latest.detail)+(latest.prov?'. Provisional, fewer than 5 games.':'.'):'No graded night yet.'}${sat?' Did not play the latest night ('+esc(shortDay(lastNight.night))+').':''}</p></section>`}).join('');
+    return `<section class="card s2"><div class="h" style="margin-bottom:10px"><div style="display:flex;gap:10px;align-items:center;min-width:0"><span class="cdot" style="background:${p.color};width:12px;height:12px"></span><div style="min-width:0"><h2 style="font-size:16px">${esc(p.nick)}</h2><div class="small muted">${esc(p.role)}${p.style?' · '+esc(p.style):''}</div></div></div>${latest?`<div style="text-align:right;flex:none"><div class="small muted" style="margin-bottom:4px">Night of ${esc(shortDay(when))}</div>${gradeChip(nightLetter(when,p))}</div>`:''}</div>
+     <div class="stats"><div class="stat"><div class="k">Astroneers Overall (all nights)</div><div class="v num">${rov!=null?rov:'–'}</div></div></div>
+     <p class="small muted" style="margin:10px 0 0">${latest?esc(latest.detail)+(latest.prov?'. Provisional, fewer than 5 games.':'.'):'No graded night yet.'}${sat?' Did not play the latest night ('+esc(shortDay(lastNight.night))+').':''}</p>${latest?gbreak(latest.parts):''}</section>`}).join('');
   const sery=P.map(p=>({name:p.nick,color:p.color,vals:G.map(x=>GNUM[nightLetter(x.night,p)]??null)}));
   const chart=G.length>1?lineChart({labels:lab,series:sery,min:0,max:4,yfmt:v=>'FDCBA'[v]||'',fmt:v=>'FDCBA'[v],tipTitle:i=>'Night of '+fmtDay(G[i].night,true),aria:'Night grade by night'}):'<div class="empty">Need two graded nights for a chart.</div>';
   const table=`<div class="tscroll"><table><thead><tr><th>Player</th>${G.map(x=>`<th>${esc(shortDay(x.night))}<br><span style="font-weight:400;text-transform:none;letter-spacing:0">${esc(x.record)}</span></th>`).join('')}</tr></thead><tbody>${P.map(p=>`<tr><td><span class="cdot" style="background:${p.color};display:inline-block;margin-right:8px"></span>${esc(p.nick)}</td>${G.map(x=>{const r=x.rows[p.key];if(!r)return '<td><span class="muted" title="Did not play">–</span></td>';return `<td>${gradeChip(nightLetter(x.night,p),true)} ${r.prov?'*':''}</td>`}).join('')}</tr>`).join('')}</tbody></table></div><p class="small muted" style="margin:10px 0 0">Grades are worked out from the box scores. * means provisional (fewer than 5 games). A dash means the player did not play that night. Published report grades appear when available.</p>`;
@@ -1736,11 +1818,13 @@ document.addEventListener('click',e=>{
   if(d.gf){S.gfilter=d.gf;render(true);return}
   if(d.sg){S.sgrp=d.sg;render(true);return}
   if(d.rep!=null){repSel=+d.rep;render(true);return}
+  if(d.ask){askSubmit(d.ask);return}
   if(d.copyrecap){const el=document.getElementById('recapTxt'),txt=el?el.textContent:'';
     const done=()=>{t.textContent='Copied ✓';setTimeout(()=>{t.textContent='Copy text'},1800)};
     const fb=()=>{try{const r=document.createRange();r.selectNodeContents(el);const sl=getSelection();sl.removeAllRanges();sl.addRange(r);t.textContent='Selected: copy it'}catch(e){}};
     try{navigator.clipboard.writeText(txt).then(done,fb)}catch(e){fb()}return}
 });
+document.addEventListener('submit',e=>{if(e.target.id==='askForm'){e.preventDefault();const i=document.getElementById('askq');askSubmit(i&&i.value)}});
 document.addEventListener('input',e=>{
   const id=e.target.id;
   if(id==='gq'||id==='sq'){S[id]=e.target.value;const pos=e.target.selectionStart;render(true);const i=document.getElementById(id);if(i){i.focus();try{i.setSelectionRange(pos,pos)}catch(_){}}}
