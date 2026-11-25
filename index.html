@@ -67,7 +67,11 @@ a{color:inherit}
 .pill.l{background:rgba(236,68,61,.18);color:var(--badText)}
 .pill.w{background:rgba(99,166,221,.18);color:var(--goodText)}
 .chips{display:flex;gap:6px;flex-wrap:wrap}
-.askLog{max-height:260px;overflow:auto;display:flex;flex-direction:column;gap:6px}.askm{display:flex}.askm.u{justify-content:flex-end}.askm span{max-width:88%;padding:8px 11px;border-radius:12px;font-size:13px;line-height:1.45}.askm.u span{background:var(--accent,#63a6dd);color:#0b1520}.askm.c span{background:rgba(127,150,180,.18)}
+.officeBtn{position:fixed;right:max(14px,env(safe-area-inset-right,0px));bottom:calc(env(safe-area-inset-bottom,0px) + 14px);z-index:60;padding:11px 16px;border-radius:999px;border:1px solid var(--line);background:#63a6dd;color:#0b1520;font:600 14px/1 inherit;box-shadow:0 6px 20px rgba(0,0,0,.35);cursor:pointer}
+.officePanel{position:fixed;right:max(12px,env(safe-area-inset-right,0px));bottom:calc(env(safe-area-inset-bottom,0px) + 12px);z-index:70;width:min(380px,calc(100vw - 24px));max-height:min(78vh,620px);overflow:auto;padding:14px;border-radius:16px;background:#1d2535;color:#eef3fa;border:1px solid var(--line);box-shadow:0 14px 40px rgba(0,0,0,.5)}
+.oh{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}.oclose{background:none;border:0;color:inherit;font-size:18px;cursor:pointer;padding:4px 8px}
+@media (max-width:900px){.officeBtn{bottom:calc(env(safe-area-inset-bottom,0px) + 78px)}.officePanel{bottom:calc(env(safe-area-inset-bottom,0px) + 74px);max-height:calc(100vh - 170px)}}
+.askLog{max-height:240px;overflow:auto;display:flex;flex-direction:column;gap:6px}.askm{display:flex}.askm.u{justify-content:flex-end}.askm span{max-width:88%;padding:8px 11px;border-radius:12px;font-size:13px;line-height:1.45}.askm.u span{background:var(--accent,#63a6dd);color:#0b1520}.askm.c span{background:rgba(127,150,180,.18)}
 .recap{white-space:pre-wrap;word-break:break-word;font:13px/1.5 inherit;font-family:inherit;background:var(--chip);border-radius:12px;padding:14px;margin:0;max-height:420px;overflow:auto;color:var(--body)}
 .chip{border:0;background:var(--chip);padding:8px 14px;border-radius:999px;font-size:12.5px;white-space:nowrap;min-height:36px;display:inline-flex;align-items:center;gap:7px}
 .chip[aria-pressed=true]{background:var(--solid);color:#fff}
@@ -808,7 +812,7 @@ function recapText(rep){
   lines.push('');lines.push('📊 '+SITE_URL);
   return lines.join('\n').replace(/\n{3,}/g,'\n\n').trim()+'\n';
 }
-/* ---------- ASK COACH: answers from the site's own data, no outside service ---------- */
+/* ---------- COACH'S OFFICE (ask-the-coach bot): answers from the site's own data, no outside service ---------- */
 const ASK_TIPS={'Scoring':'Get to the slot and finish what you start. One more shot on net each game.','Goal involvement':'Be on the ice for goals: support the puck and go to the net.','Scoring chances':'Shoot from the slot and the crease, tip pucks, screen the goalie.','Takeaways':'Stick on stick, cut passing lanes, be first to loose pucks.','Blocks':'Get in lanes and block more shots.','Puck care':'Chip it deep instead of forcing the middle. Take the simple first pass.','Win bonus':'Wins move the grade. Finish games and play to the horn.','Passing %':'Find the short outlet, make the safe pass first.','Shooting %':'Pick your spots, put it on net before you shoot from the perimeter.','Penalties':'Stay out of the box and draw penalties by keeping your feet moving.','Save %':'Control rebounds and track the puck all the way in.','Saves above average':'Stay square and cut off the high-danger shots.','Goals against':'Talk to the D so we clear the slot.','Special saves':'Stay patient on breakaways and desperation chances.','Pokechecks':'Use the poke check when the shooter is too close to read.','Shutout':'Nothing to fix, just keep the door closed.'};
 const ASK_SUGG=['How was last night?','Why is Flappy a C?','What should Moose work on?','How many goals does Moose have?','Who was the star last night?','How do grades work?','Gumbo save percentage','What is our next game focus?'];
 function askFindPlayer(q){q=q.toLowerCase();return P.find(p=>q.includes(p.nick.split(' ')[0].toLowerCase())||q.includes(p.key.replace('astroneer_','')))||null}
@@ -873,14 +877,20 @@ function coachAnswer(q){
   if(p)return /(grade|rating|overall|ovr)/.test(L)?askGradeWhy(p):askStat(p,L);
   if(/(team|club).*(goal|record)|how many (wins|games)/.test(L)){const T=tally(SESS.flatMap(x=>x.games));return `Tracked record: ${T.w}-${T.l}${T.o?'-'+T.o:''}, goals ${T.gf}-${T.ga}.`}
   return `I can answer questions about grades, stats and last night. Try: "${ASK_SUGG.slice(0,4).join('", "')}".`}
-function askCard(){
+function officeBody(){
   const log=(S.askLog||[]).map(m=>`<div class="askm ${m.who}"><span>${esc(m.t)}</span></div>`).join('');
-  return `<section class="card s4" id="cAsk"><div class="h"><h2>Ask Coach</h2><span class="pill i">From the box scores</span></div>
-   <p class="small muted" style="margin:0 0 10px">Ask about your grade, your stats, last night or what to work on. Answers come from the site's data, so it won't know anything that isn't in the box scores.</p>
+  return `<div class="oh"><b>🗂️ Coach's Office</b><button class="oclose" data-office="0" aria-label="Close">✕</button></div>
+   <p class="small muted" style="margin:0 0 8px">Ask about your grade, your stats, last night or what to work on. Answers come from the box scores.</p>
    <div class="askLog" aria-live="polite">${log||'<p class="small muted" style="margin:0">Tap a question or type your own.</p>'}</div>
-   <div class="chips" style="margin:10px 0">${ASK_SUGG.map(x=>`<button class="chip" data-ask="${esc(x)}">${esc(x)}</button>`).join('')}</div>
-   <form id="askForm" style="display:flex;gap:8px"><input id="askq" type="text" autocomplete="off" placeholder="Ask Coach…" value="" style="flex:1;min-width:0;padding:10px 12px;border-radius:10px;border:1px solid var(--line,#34445a);background:var(--card,transparent);color:inherit;font:inherit"><button class="chip" type="submit" data-askgo="1" aria-pressed="true">Ask</button></form></section>`}
-function askSubmit(q){q=String(q||'').trim();if(!q)return;S.askLog=(S.askLog||[]).concat([{who:'u',t:q},{who:'c',t:coachAnswer(q)}]).slice(-12);render(true);const l=document.querySelector('#cAsk .askLog');if(l)l.scrollTop=l.scrollHeight;const c=document.getElementById('cAsk');if(c)c.scrollIntoView({block:'nearest'})}
+   <div class="chips" style="margin:8px 0">${ASK_SUGG.map(x=>`<button class="chip" data-ask="${esc(x)}">${esc(x)}</button>`).join('')}</div>
+   <form id="askForm" style="display:flex;gap:8px"><input id="askq" type="text" autocomplete="off" placeholder="Ask the Coach's Office…" style="flex:1;min-width:0;padding:10px 12px;border-radius:10px;border:1px solid var(--line,#34445a);background:transparent;color:inherit;font:inherit"><button class="chip" type="submit" aria-pressed="true">Ask</button></form>`}
+function officeDraw(focus){const p=document.getElementById('officePanel'),b=document.getElementById('officeBtn');if(!p||!b)return;
+  p.hidden=!S.officeOpen;b.hidden=!!S.officeOpen;if(S.officeOpen){p.innerHTML=officeBody();const l=p.querySelector('.askLog');if(l)l.scrollTop=l.scrollHeight;if(focus){const i=document.getElementById('askq');if(i)i.focus()}}}
+function officeInit(){
+  if(document.getElementById('officeBtn'))return;
+  const b=document.createElement('button');b.id='officeBtn';b.className='officeBtn';b.dataset.office='1';b.innerHTML='🗂️ Coach\'s Office';document.body.appendChild(b);
+  const p=document.createElement('section');p.id='officePanel';p.className='officePanel';p.hidden=true;p.setAttribute('role','dialog');p.setAttribute('aria-label',"Coach's Office");document.body.appendChild(p)}
+function askSubmit(q){q=String(q||'').trim();if(!q)return;S.askLog=(S.askLog||[]).concat([{who:'u',t:q},{who:'c',t:coachAnswer(q)}]).slice(-12);officeDraw(true)}
 function recapCard(rep){
   const t=recapText(rep);if(!t)return '';
   return `<section class="card s2" id="cRecap"><div class="h"><h2>Text for the team</h2><span class="pill i">Copy and send</span></div>
@@ -899,7 +909,6 @@ function vCoach(){
   <div class="grid">
    <section class="card s2"><div class="h"><h2>Morning report</h2>${sel}</div>${coachBlock(rep,false)}</section>
    ${recapCard(rep)}
-   ${askCard()}
    <section class="card s2"><div class="h"><h2>Report cards</h2><span class="pill i">Tap a player</span></div>${p&&p.players.length?reportCards(p):'<p class="empty">No player grades in this report.</p>'}</section>
    <section class="card s4"><div class="h"><h2>What the numbers say</h2><span class="pill">Career totals</span></div><div class="col2">${notes.map(insRow).join('')}</div></section>
    ${ch.length?`<section class="card s4"><div class="h"><h2>ChelHead insights</h2><span class="pill">Via ChelHead</span></div><div class="col2">${ch.map(i=>insRow({tone:i.trend==='down'?'bad':'good',title:nickText(i.title),metric:i.metric,value:i.value,body:nickText(i.body||'')})).join('')}</div></section>`:''}
@@ -1818,6 +1827,7 @@ document.addEventListener('click',e=>{
   if(d.gf){S.gfilter=d.gf;render(true);return}
   if(d.sg){S.sgrp=d.sg;render(true);return}
   if(d.rep!=null){repSel=+d.rep;render(true);return}
+  if(d.office!=null){S.officeOpen=d.office==='1';officeDraw(S.officeOpen);return}
   if(d.ask){askSubmit(d.ask);return}
   if(d.copyrecap){const el=document.getElementById('recapTxt'),txt=el?el.textContent:'';
     const done=()=>{t.textContent='Copied ✓';setTimeout(()=>{t.textContent='Copy text'},1800)};
@@ -1839,7 +1849,7 @@ function load(){
     fetch('reports.json'+q,{cache:'no-store'}).then(r=>r.ok?r.json():null).catch(()=>null)
   ]).then(([d,m,r])=>{D=d;M=m;R=r;prep();render(true)});
 }
-navHtml();
+navHtml();officeInit();
 const btn=$('#refreshBtn');
 btn.addEventListener('click',()=>{btn.classList.add('spin');load().catch(()=>{}).finally(()=>setTimeout(()=>btn.classList.remove('spin'),500))});
 load().catch(err=>{$('#view').innerHTML='<div class="card"><div class="empty">Could not load the club data. Check that data.json and matches.json sit next to this page. ('+esc(err.message)+')</div></div>'});
