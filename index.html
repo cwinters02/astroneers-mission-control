@@ -641,6 +641,7 @@ function coachNotes(){
   for(let k=1;k<=16;k++){sh[k]=T(P,p=>n(p.raw['skShotsLocationOnIce'+k]));gl[k]=T(P,p=>n(p.raw['skGoalsLocationOnIce'+k]))}
   const tot=Object.values(sh).reduce((a,b)=>a+b,0),slotK=[7,4,6,8],ss=slotK.reduce((t,k)=>t+sh[k],0),sg=slotK.reduce((t,k)=>t+gl[k],0),ag=Object.values(gl).reduce((a,b)=>a+b,0);
   if(tot)out.push({tone:'good',score:1.5,title:'We live in the slot',metric:'Shots from slot and crease',value:f1(ss/tot*100)+'%',body:`${f0(ss)} of ${f0(tot)} shots come from the low slot, crease and net sides, and ${f0(sg)} of our ${f0(ag)} goals. That is how this team scores.`});
+  try{const z=goalieBench().zone,gk=GK[0];if(z&&z.slotSv!=null&&z.outSv!=null)out.push({tone:z.slotSv>=.5?'good':'note',score:1.4,title:`${gk?gk.nick:'Goalie'}: slot vs perimeter`,metric:'Save % from the slot',value:f1(z.slotSv*100)+'%',body:`${f1(z.slotShare*100)}% of shots against come from the slot and crease, and he stops ${f1(z.slotSv*100)}% of those versus ${f1(z.outSv*100)}% from the perimeter. The grade bar moves ${z.adj>=0?'up':'down'} ${f1(Math.abs(z.adj)*100)} points for the mix of shots he faces. Clear the slot and the numbers climb.`})}catch(e){}
   const fo=T(SK,p=>n(p.raw.skfow)),fl=T(SK,p=>n(p.raw.skfol));
   if(fo+fl>200){const best=[...SK].filter(p=>n(p.raw.skfo)>=150).sort((a,b)=>b.fo-a.fo)[0];
     out.push({tone:fo/(fo+fl)>=.52?'good':'note',score:.8,title:'Faceoffs',metric:'Team faceoff %',value:f1(fo/(fo+fl)*100)+'%',body:`${f0(fo)}-${f0(fl)} as a team.${best?' '+best.nick+' should take the big draws at '+f1(best.fo)+'%.':''}`})}
@@ -1110,7 +1111,19 @@ function goalieBench(){
     g.rows.forEach(r=>{if(r.position==='goalie'&&n(r.glshots)>0){gSh+=n(r.glshots);gSv+=n(r.glsaves);gGa+=n(r.glga);gN++;pk+=n(r.glpokechecks);sp+=n(r.glbrksaves)+n(r.glpensaves)+n(r.gldsaves)}})}));
   const PRIOR=100,P0=.704;
   const sv=(oSv+gSv+PRIOR*P0)/(oSh+gSh+PRIOR);
-  _gb={sv,ga:tn?tg/tn:3,pk:(pk+1.5*5)/(gN+5),sp:(sp+.5*5)/(gN+5),shots:oSh+gSh,games:gN};
+  /* shot-location adjustment: how hard are the shots Gumbo faces compared with the average shot in the pool? */
+  let zadj=0,zInfo=null;
+  try{const gk=P.find(p=>p.isG);
+    if(gk&&gk.raw){const rs=[],rg=[],gs=[],gg=[];
+      for(let k=1;k<=16;k++){const sS=P.reduce((t,p)=>t+(p.isG?0:n(p.raw['skShotsLocationOnIce'+k])),0),sG=P.reduce((t,p)=>t+(p.isG?0:n(p.raw['skGoalsLocationOnIce'+k])),0);
+        rs.push(sS);rg.push(sG);gs.push(n(gk.raw['glShotsLocationOnIce'+k]));gg.push(n(gk.raw['glGoalsLocationOnIce'+k]))}
+      const rate=k=>{const sh=rs[k]+gs[k];return sh>=15?(rg[k]+gg[k])/sh:null};
+      let eAll=0,eG=0,tAll=0,tG=0;
+      for(let k=0;k<16;k++){const r=rate(k);if(r==null)continue;eAll+=(rs[k]+gs[k])*r;tAll+=rs[k]+gs[k];eG+=gs[k]*r;tG+=gs[k]}
+      if(tAll&&tG){const expAll=1-eAll/tAll,expG=1-eG/tG;zadj=clamp(expG-expAll,-.04,.04);
+        const slot=[6,3,5,7];const sh=slot.reduce((t,k)=>t+gs[k],0),go=slot.reduce((t,k)=>t+gg[k],0),all=gs.reduce((a,b)=>a+b,0),ag=gg.reduce((a,b)=>a+b,0);
+        zInfo={slotShare:all?sh/all:0,slotSv:sh?1-go/sh:null,outSv:all-sh?1-(ag-go)/(all-sh):null,adj:zadj}}}}catch(e){}
+  _gb={sv:sv+zadj,zone:zInfo,ga:tn?tg/tn:3,pk:(pk+1.5*5)/(gN+5),sp:(sp+.5*5)/(gN+5),shots:oSh+gSh,games:gN};
   return _gb}
 /* goalie signal: items [{r,g}] -> [-1,1]. save %, saves above average (volume at a good %), goals against, special saves, pokechecks, win, shutout */
 function goalieSignal(items,B){
