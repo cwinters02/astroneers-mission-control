@@ -1238,7 +1238,7 @@ function metricTake(sk,m,peers,idx){
   const f=ROWF[m.label],bk=BKEY[m.label];
   if(f&&bk&&!A.p.isG){const pa=perApp(A.p,f),b=benchOf(A.p,bk);
     if(pa&&b){const d=(pa.v-b)/b;t+=` In tracked 3v3 games ${A.p.nick} runs ${f1(pa.v)} a game against a 3v3 ${A.p.bench} average of ${f1(b)} (${d>=0?'+':''}${Math.round(d*100)}%).`}}
-  if(/Save %/.test(m.label)&&A.p.isG){const diff=A.v/100-.704;t+=` The human 3v3 goalie average is 70.4%, so that is ${diff>=0?'above':'below'} par by ${f1(Math.abs(diff)*100)} points.`}
+  if(/Save %/.test(m.label)&&A.p.isG){const diff=A.v/100-goalieBench().sv;t+=` The goalie benchmark (opposing goalies plus ours) is ${f1(goalieBench().sv*100)}%, so that is ${diff>=0?'above':'below'} par by ${f1(Math.abs(diff)*100)} points.`}
   return t;
 }
 function staffEveryStat(){
@@ -1268,7 +1268,7 @@ function staffUpdates(){
   /* goalie */
   const gk=GK[0];if(gk){const gr=NR[gk.key].filter(r=>r.position==='goalie'&&n(r.glshots)>0);
     if(gr.length){const sh=gr.reduce((a,r)=>a+n(r.glshots),0),sv=gr.reduce((a,r)=>a+n(r.glsaves),0),sp=sv/sh*100;
-      add('gol',`${gk.nick}: ${sv} saves on ${sh} shots (${f1(sp)}%)`,`${sp>=70.4?'At or above':'Below'} the human 3v3 goalie average of 70.4%. His season mark is ${f1(gk.svp)}%. ${sh<20?'Under 20 shots is a thin sample.':''}`)}
+      add('gol',`${gk.nick}: ${sv} saves on ${sh} shots (${f1(sp)}%)`,`${sp>=goalieBench().sv*100?'At or above':'Below'} the goalie benchmark of ${f1(goalieBench().sv*100)}%. His season mark is ${f1(gk.svp)}%. ${sh<20?'Under 20 shots is a thin sample.':''}`)}
     else add('gol',`${gk.nick} did not record a game`,'No goalie line this night, so there is nothing to grade. If he is out, someone has to be named in net before puck drop.')}
   /* possession */
   add('pos',`Shot share: ${T.sf}-${T.sa}`,`${T.sf+T.sa?Math.round(T.sf/(T.sf+T.sa)*100):0}% of shots were ours (season ${all.sf+all.sa?Math.round(all.sf/(all.sf+all.sa)*100):0}%). ${T.sf>=T.sa?'We had the puck more than they did.':'They out-shot us, which usually means we gave them the puck.'}`);
@@ -1313,7 +1313,7 @@ function playerStaff(p){
   if(p.isG){
     const gr=((LOG[p.key]||{}).gl||[]).filter(x=>n(x.r.glshots)>0).slice(-N);
     if(gr.length){const sh=gr.reduce((a,x)=>a+n(x.r.glshots),0),sv=gr.reduce((a,x)=>a+n(x.r.glsaves),0),sp=sv/sh*100;
-      out.push({k:'gol',title:`${f1(sp)}% over his last ${gr.length} games`,body:`${sv} saves on ${sh} shots against a human 3v3 goalie average of 70.4%. ${sp>=70.4?'That is starter level. Keep the rebounds tight.':'That is below par. Pick the goals you want back and we go through them.'}${gr.length<5?' Small sample.':''}`})}
+      out.push({k:'gol',title:`${f1(sp)}% over his last ${gr.length} games`,body:`${sv} saves on ${sh} shots against a goalie benchmark of ${f1(goalieBench().sv*100)}%. ${sp>=goalieBench().sv*100?'That is starter level. Keep the rebounds tight.':'That is below par. Pick the goals you want back and we go through them.'}${gr.length<5?' Small sample.':''}`})}
     return out;
   }
   const rs=rowsOf(p).slice(-N);if(!rs.length)return out;
@@ -1413,9 +1413,9 @@ function buildReport(night){
     if(!g){if(!rows.some(r=>isActive(r)||n(r.glshots)>0)){cards.push(`${EM[p.key]||'🏒'} ${p.nick} · Night Grade N/A · Astroneers Overall ${overallAt(p,night)??'N/A'}\nNo recorded appearance this night, so no grade. If you are out, tell the group before first puck drop so we can set the lineup.`)}return}
     const ov=overallAt(p,night),hd=`${EM[p.key]||'🏒'} ${p.nick} · Night Grade ${g.grade} · Astroneers Overall ${ov??'N/A'}`;
     if(p.isG){
-      const gr=rows.filter(r=>r.position==='goalie'&&n(r.glshots)>0);const sh=gr.reduce((a,r)=>a+n(r.glshots),0),sv=gr.reduce((a,r)=>a+n(r.glsaves),0),sp=sh?sv/sh*100:0,hi=sp>=70.4,diff=Math.abs(sp-70.4);
+      const gr=rows.filter(r=>r.position==='goalie'&&n(r.glshots)>0);const sh=gr.reduce((a,r)=>a+n(r.glshots),0),sv=gr.reduce((a,r)=>a+n(r.glsaves),0),sp=sh?sv/sh*100:0,hi=sp>=goalieBench().sv*100,diff=Math.abs(sp-goalieBench().sv*100);
       const lead=g.grade==='A'||g.grade==='B'?pick([`Gumbo stood on his head.`,`The crease was LOCKED DOWN.`],h):pick([`The crease was a rough one.`,`Tough night between the pipes.`],h);
-      cards.push(`${hd}\n${lead} ${sv} saves on ${sh} shots, ${f1(sp)}% in ${gr.length} game${gr.length>1?'s':''}. The human 3v3 goalie average is 70.4%, so that is ${f1(diff)} points ${hi?'ABOVE':'below'} par.\nThe critique: ${hi?'great numbers, now steal one extra save on the breakaway.':'we need the first save to be clean and the rebounds to die. Not asking for perfect, asking for one more stop a game.'}\nNext game: ${hi?'Keep the rebound control, then steal one extra save on the breakaway.':'Pick the goal you would most like back and tell us what you saw. Then we go again.'}\n🎙️ “${hi?'That is a goalie playing like the last line of defense. Keep it rolling.':'Sixty-something percent is not our number. Settle in. Same time tomorrow.'}”`);
+      cards.push(`${hd}\n${lead} ${sv} saves on ${sh} shots, ${f1(sp)}% in ${gr.length} game${gr.length>1?'s':''}. The goalie benchmark (opposing goalies plus ours) is ${f1(goalieBench().sv*100)}%, so that is ${f1(diff)} points ${hi?'ABOVE':'below'} par.\nThe critique: ${hi?'great numbers, now steal one extra save on the breakaway.':'we need the first save to be clean and the rebounds to die. Not asking for perfect, asking for one more stop a game.'}\nNext game: ${hi?'Keep the rebound control, then steal one extra save on the breakaway.':'Pick the goal you would most like back and tell us what you saw. Then we go again.'}\n🎙️ “${hi?'That is a goalie playing like the last line of defense. Keep it rolling.':'Sixty-something percent is not our number. Settle in. Same time tomorrow.'}”`);
       grades.push({p,g,line:`${sv}/${sh} saves`});return}
     const x=sk.find(q=>q.p.key===p.key);if(!x)return;
     const act=rows.filter(r=>r.position!=='goalie'&&isActive(r));
@@ -1567,7 +1567,7 @@ function vRatings(){
   const bt=`<div class="tscroll"><table><thead><tr><th>Role</th><th>Goals</th><th>Assists</th><th>Takeaways</th><th>Giveaways</th><th>Blocks</th></tr></thead><tbody>${['center','wing','defender'].filter(k=>B[k]).map(k=>`<tr><td>${k==='defender'?'Defense':cap(k)}</td><td class="num">${f2(B[k].goals)}</td><td class="num">${f2(B[k].assists)}</td><td class="num">${f2(B[k].takeaways)}</td><td class="num">${f2(B[k].giveaways)}</td><td class="num">${f2(B[k].blocks)}</td></tr>`).join('')}</tbody></table></div>`;
   const method=`<section class="card s4"><details class="fold"><summary><span>How grades work</span><span class="pill o">Experimental</span></summary><div class="col2" style="margin-top:12px"><div>
     <div class="eyebrow" style="margin-bottom:8px">Night grade</div>
-    <p class="small" style="margin:0 0 10px;color:var(--body);line-height:1.55">One letter for one night, worked out from the box scores. 80% is how the night compares with an average 3v3 player in the same role, 20% is how it compares with that player's own earlier nights (or the team's, until they have 3 games). Matching both gives a 78, a C. Forwards are scored on goals and assists, takeaways and giveaways. Defense adds blocks. Goalies are scored on pooled save % against a 70.4% human 3v3 goalie average. Under 5 games makes it provisional.</p>
+    <p class="small" style="margin:0 0 10px;color:var(--body);line-height:1.55">One letter for one night, worked out from the box scores. 80% is how the night compares with an average 3v3 player in the same role, 20% is how it compares with that player's own earlier nights (or the team's, until they have 3 games). Matching both gives a 78, a C. Forwards are scored on goals and assists, takeaways and giveaways. Defense adds blocks. Skaters also get credit for scoring chances, involvement in our goals, wins, passing %, shooting % and penalties. Goalies are scored on save %, saves above average, goals against, special saves, pokechecks, wins and shutouts, against a benchmark pooled from opposing goalies and ours that updates as we play. Under 5 games makes it provisional.</p>
     <div class="legend"><span><i style="background:#9fcdf0"></i>A 90+</span><span><i style="background:#63a6dd"></i>B 80 to 89</span><span><i style="background:#eae6ca"></i>C 70 to 79</span><span><i style="background:#ca5a63"></i>D 60 to 69</span><span><i style="background:#ec443d"></i>F under 60</span></div>
     </div>
    <div><div class="eyebrow" style="margin-bottom:8px">League averages used (per game)</div>${bt}<p class="small muted" style="margin:10px 0 0">ChelHead's visible averages for tracked 3v3 players, not exact population figures.</p></div></div></details></section>`;
