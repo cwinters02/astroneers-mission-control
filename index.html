@@ -527,7 +527,7 @@ const heatSq=a=>Math.sqrt(Math.max(0,Math.min(1,a)));
 const heatOp=a=>a<=0?0:(.35+Math.min(1,a)*.55);
 const heatLegend=(x,y,w)=>`<g><defs><linearGradient id="hl${x}${y}" x1="0" x2="1">${HEAT.map(([t,c])=>`<stop offset="${t}" stop-color="rgb(${c})"/>`).join('')}</linearGradient></defs><rect x="${x}" y="${y}" width="${w}" height="7" rx="3.5" fill="url(#hl${x}${y})" stroke="#7d93ab" stroke-opacity=".5"/><text x="${x}" y="${y+16}" font-size="8" fill="#26405c" font-weight="700">fewer</text><text x="${x+w}" y="${y+16}" text-anchor="end" font-size="8" fill="#26405c" font-weight="700">more</text></g>`;
 function zoneMap(shots,goals,mode){
-  const sh=k=>n(shots[k]),gl=k=>n(goals[k]);
+  const gl=k=>n(goals[k]),sh=k=>Math.max(n(shots[k]),gl(k));/* ChelHead logs some goals without a matching shot in that zone; a goal is always a shot */
   const val=k=>mode==='goals'?gl(k):mode==='pct'?(sh(k)>=8?gl(k)/sh(k)*100:0):sh(k);
   const keys=Object.keys(ZG).map(Number),mx=Math.max(1,...keys.map(val));
   const MAR='#7a2f3a',BLU='#63a6dd',NAV='#2c4f7d';
@@ -895,7 +895,7 @@ function vPlayers(){
        <section class="card s2"><div class="h"><h2>Puck care by game</h2><span class="pill">Last ${rows.length}</span></div>${legend([{name:'Takeaways',color:'#63a6dd'},{name:'Giveaways',color:'#ec443d'}])}${lineChart({labels,series:[{name:'Takeaways',color:'#63a6dd',vals:rows.map(x=>n(x.r.sktakeaways))},{name:'Giveaways',color:'#ec443d',vals:rows.map(x=>n(x.r.skgiveaways))}],min:0,tipTitle:tt,aria:'Takeaways and giveaways by game'})}</section>`;
     }
   }
-  const zones=(p.isG?n(p.raw.glshots):n(p.raw.skshots))?`<section class="card s4"><div class="h"><h2>${p.isG?'Shots against map':'Shot map'}</h2>${chipsOf('zmode',p.isG?[['shots','Shots against'],['goals','Goals against'],['pct','Goal % against']]:[['shots','Shots'],['goals','Goals'],['pct','Shooting %']],S.zmode)}</div>${playerZones(p,S.zmode)}<p class="small muted" style="margin:10px 0 0">Darker zones have more. Shooting % only shows for zones with 8 or more shots. Tap or hover a zone for the exact numbers.</p></section>`:'';
+  const zones=(p.isG?n(p.raw.glshots):n(p.raw.skshots))?`<section class="card s4"><div class="h"><h2>${p.isG?'Shots against map':'Shot map'}</h2>${chipsOf('zmode',p.isG?[['shots','Shots against'],['goals','Goals against'],['pct','Goal % against']]:[['shots','Shots'],['goals','Goals'],['pct','Shooting %']],S.zmode)}</div>${playerZones(p,S.zmode)}<p class="small muted" style="margin:10px 0 0">Darker zones have more. Shooting % only shows for zones with 8 or more shots. ChelHead sometimes logs a goal without a matching shot in the same zone, so a zone never shows more than 100%. Tap or hover a zone for the exact numbers.</p></section>`:'';
   const groups=(p.isG?GLG.concat(SKG):SKG.concat(GLG.slice(0,0))).map(([name,ms],gi)=>`<details class="sess" ${gi===0?'open':''}><summary><span>${esc(name)}</span></summary><div class="stats" style="padding:2px 0 14px">${ms.map(m=>mtile(m,p,(p.isG&&GLG.some(g=>g[1].includes(m)))?GK:SK)).join('')}</div></details>`).join('');
   const all=`<section class="card s4"><div class="h"><h2>Every stat</h2><span class="small muted">Rank is among ${peers.length} ${p.isG?'goalie':'skaters'}${p.isG?'':' on the club'}</span></div>${groups}</section>`;
   return `<div class="ph"><h2>Players</h2><p>Pick a player to see how they play, how they compare, and every number EA tracks.</p></div><div class="toolbar">${picker}</div><div class="grid">${head}${radarCard}${benchCard}${posCard}${trend}${zones}${all}</div>`;
