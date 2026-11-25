@@ -16,7 +16,7 @@ F.games.slice().sort((a, b) => a.ts - b.ts).forEach(g => {
     goalieShots: g.oppGoalie ? g.oppGoalie.shots : 0, goalieSaves: g.oppGoalie ? g.oppGoalie.saves : 0,
     oppDivision: g.oppDivision, ourDivision: g.usDivision, source: 'ChelHead club-matches feed, ' + F.pulledAt.slice(0, 10)};
   let m = M.matches.find(x => String(x.id) === g.id) ||
-          M.matches.find(x => x.opp && x.opp.name === g.opp && Number(x.us.score) === g.us && Number(x.opp.score) === g.th && (x.ts == null || Math.abs(x.ts - g.ts) < 7200));
+          M.matches.find(x => x.opp && x.opp.name === (g.opp || 'Unnamed club') && Number(x.us.score) === g.us && Number(x.opp.score) === g.th && (x.ts == null || Math.abs(x.ts - g.ts) < 7200));
   if (m) {
     upgraded++;
   } else {
@@ -25,7 +25,7 @@ F.games.slice().sort((a, b) => a.ts - b.ts).forEach(g => {
       verifiedAt: F.pulledAt, modeLabel: '3v3 lobby', type: g.type, sessionNight: nightOf(g.ts), dateNote: 'Timestamp from the ChelHead feed.',
       dnf: !!(g.usDnfWin || g.oppDnfWin), dtw: null,
       us: {score: g.us, shots: g.usShots, result: g.us > g.th ? 1 : 2, division: 11 - g.usDivision},
-      opp: {name: g.opp, clubId: g.oppClubId, score: g.th, shots: g.thShots, division: 11 - g.oppDivision}};
+      opp: {name: g.opp || 'Unnamed club', clubId: g.oppClubId, score: g.th, shots: g.thShots, division: 11 - g.oppDivision}};
     M.matches.unshift(m); added++;
   }
   if (m.ts == null) m.ts = g.ts;
