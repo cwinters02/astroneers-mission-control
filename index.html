@@ -1059,17 +1059,31 @@ function skaterSignal(items){
   if(w<.5)return null;
   return s/w;
 }
+/* dynamic goalie benchmark: pools opposing goalies' results against us (team shots/goals) with our own goalie's games,
+   shrunk toward a .704 prior that fades as shots pile up. Pokechecks/special saves/GA use our goalie's own history with a small prior. */
+let _gb=null;
+function goalieBench(){
+  if(_gb)return _gb;
+  let oSh=0,oSv=0,gSh=0,gSv=0,gGa=0,gN=0,tg=0,tn=0,pk=0,sp=0;
+  SESS.forEach(s=>s.games.forEach(g=>{
+    if(g.sf>0){oSh+=g.sf;oSv+=Math.max(0,g.sf-g.us)}
+    tg+=g.us+g.th;tn+=2;
+    g.rows.forEach(r=>{if(r.position==='goalie'&&n(r.glshots)>0){gSh+=n(r.glshots);gSv+=n(r.glsaves);gGa+=n(r.glga);gN++;pk+=n(r.glpokechecks);sp+=n(r.glbrksaves)+n(r.glpensaves)+n(r.gldsaves)}})}));
+  const PRIOR=100,P0=.704;
+  const sv=(oSv+gSv+PRIOR*P0)/(oSh+gSh+PRIOR);
+  _gb={sv,ga:tn?tg/tn:3,pk:(pk+1.5*5)/(gN+5),sp:(sp+.5*5)/(gN+5),shots:oSh+gSh,games:gN};
+  return _gb}
 /* goalie signal: items [{r,g}] -> [-1,1]. save %, saves above average (volume at a good %), goals against, special saves, pokechecks, win, shutout */
 function goalieSignal(items,B){
-  const base=(B&&B.goalie&&B.goalie.savePct)||.704;
+  const GB=goalieBench(),base=GB.sv;
   let sh=0,sv=0,ga=0,sp=0,pk=0,w=0,nw=0,so=0;const c=items.length;
   items.forEach(({r,g})=>{sh+=n(r.glshots);sv+=n(r.glsaves);ga+=n(r.glga);sp+=n(r.glbrksaves)+n(r.glpensaves)+n(r.gldsaves);pk+=n(r.glpokechecks);const x=g?winOf(g):null;if(x!=null){w+=x;nw++}so+=n(r.glso)>0?1:0});
   if(!sh||!c)return null;
   const svp=clamp((sv/sh-base)/.12,-1,1);
   const gsaa=clamp((sv-base*sh)/c/2.5,-1,1);
-  const gag=clamp((3-ga/c)/3,-1,1);
-  const spc=clamp((sp/c-.5)/1.5,-1,1);
-  const pkc=clamp((pk/c-1.5)/3,-1,1);
+  const gag=clamp((GB.ga-ga/c)/GB.ga,-1,1);
+  const spc=clamp((sp/c-GB.sp)/1.5,-1,1);
+  const pkc=clamp((pk/c-GB.pk)/3,-1,1);
   const W=[[svp,.45],[gsaa,.15],[gag,.10],[spc,.05],[pkc,.05],[nw?clamp(w/nw,-1,1):null,.15],[so?1:null,.05]];
   let tw=0,ts=0;W.forEach(([v,x])=>{if(v!=null){tw+=x;ts+=v*x}});return ts/tw}
 function computeGrades(){
@@ -1116,7 +1130,7 @@ function computeGrades(){
   });
   return out;
 }
-window.AST={computeGrades:()=>computeGrades()};
+window.AST={computeGrades:()=>computeGrades(),gb:()=>goalieBench()};
 
 /* ---------- STAT SCOPE: last 5 (default), last 10, career ---------- */
 S.scope='l5';
