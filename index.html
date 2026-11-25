@@ -641,7 +641,7 @@ function coachNotes(){
   for(let k=1;k<=16;k++){sh[k]=T(P,p=>n(p.raw['skShotsLocationOnIce'+k]));gl[k]=T(P,p=>n(p.raw['skGoalsLocationOnIce'+k]))}
   const tot=Object.values(sh).reduce((a,b)=>a+b,0),slotK=[7,4,6,8],ss=slotK.reduce((t,k)=>t+sh[k],0),sg=slotK.reduce((t,k)=>t+gl[k],0),ag=Object.values(gl).reduce((a,b)=>a+b,0);
   if(tot)out.push({tone:'good',score:1.5,title:'We live in the slot',metric:'Shots from slot and crease',value:f1(ss/tot*100)+'%',body:`${f0(ss)} of ${f0(tot)} shots come from the low slot, crease and net sides, and ${f0(sg)} of our ${f0(ag)} goals. That is how this team scores.`});
-  try{const z=goalieBench().zone,gk=GK[0];if(z&&z.slotSv!=null&&z.outSv!=null)out.push({tone:z.slotSv>=.5?'good':'note',score:1.4,title:`${gk?gk.nick:'Goalie'}: slot vs perimeter`,metric:'Save % from the slot',value:f1(z.slotSv*100)+'%',body:`${f1(z.slotShare*100)}% of shots against come from the slot and crease, and he stops ${f1(z.slotSv*100)}% of those versus ${f1(z.outSv*100)}% from the perimeter. The grade bar moves ${z.adj>=0?'up':'down'} ${f1(Math.abs(z.adj)*100)} points for the mix of shots he faces. Clear the slot and the numbers climb.`})}catch(e){}
+  try{const z=goalieBench().zone,gk=GK[0];if(z&&z.slotSv!=null&&z.outSv!=null)out.push({tone:z.slotSv>=.5?'good':'note',score:1.4,title:`${gk?gk.nick:'Goalie'}: slot vs perimeter`,metric:'Save % from the slot',value:f1(z.slotSv*100)+'%',body:`${f1(z.slotShare*100)}% of shots against come from the slot and crease, and he stops ${f1(z.slotSv*100)}% of those versus ${f1(z.outSv*100)}% from the perimeter. This is career data only, so it does not change the nightly grade. Clear the slot and the numbers climb.`})}catch(e){}
   const fo=T(SK,p=>n(p.raw.skfow)),fl=T(SK,p=>n(p.raw.skfol));
   if(fo+fl>200){const best=[...SK].filter(p=>n(p.raw.skfo)>=150).sort((a,b)=>b.fo-a.fo)[0];
     out.push({tone:fo/(fo+fl)>=.52?'good':'note',score:.8,title:'Faceoffs',metric:'Team faceoff %',value:f1(fo/(fo+fl)*100)+'%',body:`${f0(fo)}-${f0(fl)} as a team.${best?' '+best.nick+' should take the big draws at '+f1(best.fo)+'%.':''}`})}
@@ -841,13 +841,13 @@ const BENCHKEY={'Goals / GP':'goals','Assists / GP':'assists','Giveaways / GP':'
 
 /* ---------- PLAYERS ---------- */
 function playerZones(p,mode){
-  const sh={},gl={};for(let k=1;k<=16;k++){sh[k]=p.raw['skShotsLocationOnIce'+k];gl[k]=p.raw['skGoalsLocationOnIce'+k]}
-  const ns={},ng={};for(let k=1;k<=5;k++){ns[k]=p.raw['skShotsLocationOnNet'+k];ng[k]=p.raw['skGoalsLocationOnNet'+k]}
+  const q=p.isG?'gl':'sk';const sh={},gl={};for(let k=1;k<=16;k++){sh[k]=p.raw[q+(p.isG?'Shots':'Shots')+'LocationOnIce'+k];gl[k]=p.raw[q+'GoalsLocationOnIce'+k]}
+  const ns={},ng={};for(let k=1;k<=5;k++){ns[k]=p.raw[q+'ShotsLocationOnNet'+k];ng[k]=p.raw[q+'GoalsLocationOnNet'+k]}
   const tot=Object.values(sh).reduce((a,b)=>a+n(b),0);
   const top=Object.keys(sh).map(Number).sort((a,b)=>n(sh[b])-n(sh[a]))[0];
   return `<div class="col2" style="align-items:center"><div>${zoneMap(sh,gl,mode)}</div><div>
     <div class="eyebrow" style="margin-bottom:8px">Where the puck goes on the net</div>${netMap(ns,ng)}
-    <p class="small muted" style="margin:12px 0 0">${tot?`${f0(tot)} tracked shots. Favorite spot: <b style="color:var(--ink)">${ZNAME[top]}</b> (${f1(n(sh[top])/tot*100)}% of shots).`:''}</p></div></div>`;
+    <p class="small muted" style="margin:12px 0 0">${tot?`${f0(tot)} tracked shots. ${p.isG?'Most shots against come from':'Favorite spot:'} <b style="color:var(--ink)">${ZNAME[top]}</b> (${f1(n(sh[top])/tot*100)}% of shots).`:''}</p></div></div>`;
 }
 function vPlayers(){
   if(!S.sel||!P.find(x=>x.key===S.sel))S.sel=(SK.slice().sort((a,b)=>b.pts-a.pts)[0]||P[0]).key;
@@ -895,7 +895,7 @@ function vPlayers(){
        <section class="card s2"><div class="h"><h2>Puck care by game</h2><span class="pill">Last ${rows.length}</span></div>${legend([{name:'Takeaways',color:'#63a6dd'},{name:'Giveaways',color:'#ec443d'}])}${lineChart({labels,series:[{name:'Takeaways',color:'#63a6dd',vals:rows.map(x=>n(x.r.sktakeaways))},{name:'Giveaways',color:'#ec443d',vals:rows.map(x=>n(x.r.skgiveaways))}],min:0,tipTitle:tt,aria:'Takeaways and giveaways by game'})}</section>`;
     }
   }
-  const zones=!p.isG&&n(p.raw.skshots)?`<section class="card s4"><div class="h"><h2>Shot map</h2>${chipsOf('zmode',[['shots','Shots'],['goals','Goals'],['pct','Shooting %']],S.zmode)}</div>${playerZones(p,S.zmode)}<p class="small muted" style="margin:10px 0 0">Darker zones have more. Shooting % only shows for zones with 8 or more shots. Tap or hover a zone for the exact numbers.</p></section>`:'';
+  const zones=(p.isG?n(p.raw.glshots):n(p.raw.skshots))?`<section class="card s4"><div class="h"><h2>${p.isG?'Shots against map':'Shot map'}</h2>${chipsOf('zmode',p.isG?[['shots','Shots against'],['goals','Goals against'],['pct','Goal % against']]:[['shots','Shots'],['goals','Goals'],['pct','Shooting %']],S.zmode)}</div>${playerZones(p,S.zmode)}<p class="small muted" style="margin:10px 0 0">Darker zones have more. Shooting % only shows for zones with 8 or more shots. Tap or hover a zone for the exact numbers.</p></section>`:'';
   const groups=(p.isG?GLG.concat(SKG):SKG.concat(GLG.slice(0,0))).map(([name,ms],gi)=>`<details class="sess" ${gi===0?'open':''}><summary><span>${esc(name)}</span></summary><div class="stats" style="padding:2px 0 14px">${ms.map(m=>mtile(m,p,(p.isG&&GLG.some(g=>g[1].includes(m)))?GK:SK)).join('')}</div></details>`).join('');
   const all=`<section class="card s4"><div class="h"><h2>Every stat</h2><span class="small muted">Rank is among ${peers.length} ${p.isG?'goalie':'skaters'}${p.isG?'':' on the club'}</span></div>${groups}</section>`;
   return `<div class="ph"><h2>Players</h2><p>Pick a player to see how they play, how they compare, and every number EA tracks.</p></div><div class="toolbar">${picker}</div><div class="grid">${head}${radarCard}${benchCard}${posCard}${trend}${zones}${all}</div>`;
@@ -1123,7 +1123,7 @@ function goalieBench(){
       if(tAll&&tG){const expAll=1-eAll/tAll,expG=1-eG/tG;zadj=clamp(expG-expAll,-.04,.04);
         const slot=[6,3,5,7];const sh=slot.reduce((t,k)=>t+gs[k],0),go=slot.reduce((t,k)=>t+gg[k],0),all=gs.reduce((a,b)=>a+b,0),ag=gg.reduce((a,b)=>a+b,0);
         zInfo={slotShare:all?sh/all:0,slotSv:sh?1-go/sh:null,outSv:all-sh?1-(ag-go)/(all-sh):null,adj:zadj}}}}catch(e){}
-  _gb={sv:sv+zadj,zone:zInfo,ga:tn?tg/tn:3,pk:(pk+1.5*5)/(gN+5),sp:(sp+.5*5)/(gN+5),shots:oSh+gSh,games:gN};
+  _gb={sv,zone:zInfo,ga:tn?tg/tn:3,pk:(pk+1.5*5)/(gN+5),sp:(sp+.5*5)/(gN+5),shots:oSh+gSh,games:gN};
   return _gb}
 /* goalie signal: items [{r,g}] -> [-1,1]. save %, saves above average (volume at a good %), goals against, special saves, pokechecks, win, shutout */
 function goalieSignal(items,B){
