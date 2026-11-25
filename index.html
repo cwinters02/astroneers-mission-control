@@ -743,7 +743,7 @@ function vHome(){
 let repSel=0;
 /* ---------- text recap for the team chat ---------- */
 const SITE_URL='https://cwinters02.github.io/astroneers-mission-control/';
-function recapText(rep){
+function recapTextLong(rep){
   if(!rep)return '';
   const HEAD={'TEAM PERFORMANCE':'🏒 Team Performance','PLAYER REPORT CARDS':'📋 Player Report Cards','THREE STARS':'🌟 Three Stars','THE NEXT SKATE':'🎯 Next Game','NEXT SKATE':'🎯 Next Game','THE NEXT GAME':'🎯 Next Game','NEXT GAME':'🎯 Next Game','MISSION CONTROL':'🛰️ Mission Control'};
   const cap=t=>{t=t.toLowerCase();return t.charAt(0).toUpperCase()+t.slice(1)};
@@ -766,6 +766,45 @@ function recapText(rep){
   body=body.replace(/https?:\/\/cwinters02\.github\.io\/astroneers-mission-control\/?#?\S*/g,'').replace(/\n{3,}/g,'\n\n').trim();
   if(!/🛰️ Mission Control/.test(body))body+='\n\n🛰️ Mission Control\nBox scores, grades and trends are live on GitHub Pages.';
   return [title,headline,body].filter(Boolean).join('\n\n')+'\n'+SITE_URL;
+}
+/* short team text: headline, scoreline, one stat line + one fix per player, stars, next game */
+function recapText(rep){
+  if(!rep)return '';
+  const txt=String(rep.summary||'').replace(/\r/g,'');
+  const pr=parseReport(txt);
+  if(!pr.players.length||pr.players.every(p=>!p.overall))return recapTextLong(rep);
+  const L=txt.split('\n').map(l=>l.trim());
+  const head=(pr.headline||L[0]||'').replace(/^🚨\s*BREAKING:\s*/i,'🚨 ').trim();
+  const dm=txt.match(/THE FINKLESTEIN REPORT \|\s*([A-Za-z]+ \d+)/i);
+  const date=dm?dm[1].toLowerCase().replace(/\b[a-z]/,c=>c.toUpperCase()):'';
+  const sc=L.find(l=>/^\d+[–-]\d+\s*·\s*Goals/.test(l))||'';
+  const scLine=sc.replace(/\s*·\s*Goal differential\s*/i,' · ').replace(/Goals /,'GF-GA ').replace(/Shots /,'Shots ');
+  const games=L.filter(l=>/^•?\s*[WL] \d+[–-]\d+/.test(l)||/^•\s*(W|L|OTL) /.test(l)).map(l=>'• '+l.replace(/^•\s*/,'').replace(/,\s*DNF/,' (DNF)'));
+  const sents=t=>String(t).split(/(?<=[.!?])\s+/).filter(Boolean);
+  const lines=[];
+  lines.push(head);
+  lines.push([date,scLine].filter(Boolean).join(' · '));
+  if(games.length){lines.push('');games.forEach(g=>lines.push(g))}
+  lines.push('');
+  pr.players.forEach(p=>{
+    const nick=p.name.split(' ')[0];
+    const em=p.emoji||'🏒';
+    if(/N\/A/.test(p.grade)){lines.push(`${em} ${nick} · no game (OVR ${p.overall})`);lines.push('');return}
+    const ss=sents(p.body);
+    const stat=ss.find(x=>/\d/.test(x)&&/(points|saves|goals)/i.test(x));
+    const crit=ss.find(x=>/^The critique:/i.test(x));
+    const cr=crit?crit.replace(/^The critique:\s*/i,''):(ss.find(x=>/giveaways|takeaways|puck care/i.test(x))||'');
+    lines.push(`${em} ${nick} · ${p.grade} (OVR ${p.overall})`);
+    if(stat)lines.push(stat.replace(/, best game.*$/i,'.').replace(/\.\.$/,'.'));
+    const cr2=cr.charAt(0).toUpperCase()+cr.slice(1);const dup=p.next&&cr2&&p.next.toLowerCase().includes(cr2.toLowerCase().replace(/^.*?, (now )?/,'').replace(/\.$/,''));
+    if(cr2&&!dup)lines.push(cr2.length>110?cr2.slice(0,cr2.lastIndexOf(' ',110))+'…':cr2);
+    if(p.next)lines.push('Next: '+p.next.replace(/\.$/,''));
+    lines.push('')});
+  if(pr.stars.length)lines.push('🌟 '+pr.stars.map(x=>x.replace(/\s*—.*$/,'').replace(/\..*$/,'')).join(' > '));
+  const nx=(pr.next||'').split(/,\s*/).slice(0,2).join(', ');
+  if(nx)lines.push('🎯 Next game: '+nx.replace(/\.$/,''));
+  lines.push('');lines.push('📊 '+SITE_URL);
+  return lines.join('\n').replace(/\n{3,}/g,'\n\n').trim()+'\n';
 }
 function recapCard(rep){
   const t=recapText(rep);if(!t)return '';
