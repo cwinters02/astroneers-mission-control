@@ -1383,13 +1383,16 @@ function buildReport(night){
   const short=p=>p.nick.split(' ')[0];
   const tkAll=sk.reduce((a,x)=>a+NR[x.p.key].reduce((y,r)=>y+(isActive(r)?n(r.sktakeaways):0),0),0),gvAll=sk.reduce((a,x)=>a+NR[x.p.key].reduce((y,r)=>y+(isActive(r)?n(r.skgiveaways):0),0),0);
   const win=T.w>T.l+T.o,split=T.w===T.l+T.o;
-  const head=win?`🚨 BREAKING: Astroneers go ${rec} on ${dow}${hero&&hero.pts>=10?` and ${short(hero.p)} is COOKING, ${hero.pts} points`:''}`
+  /* if the night's top grade is a goalie, he gets the headline */
+  const topP=P.filter(p=>G.rows[p.key]).sort((u,v)=>G.rows[v.key].score-G.rows[u.key].score)[0];
+  const gStar=topP&&topP.isG&&G.rows[topP.key].score>=80?(()=>{const gr=NR[topP.key].filter(r=>r.position==='goalie'&&n(r.glshots)>0),sh=gr.reduce((a,r)=>a+n(r.glshots),0),sv=gr.reduce((a,r)=>a+n(r.glsaves),0);return {p:topP,sh,sv,sp:sh?sv/sh*100:0}})():null;
+  const head=win?`🚨 BREAKING: Astroneers go ${rec} on ${dow}${gStar?` and ${short(gStar.p)} stands on his head, ${gStar.sv} saves`:hero&&hero.pts>=10?` and ${short(hero.p)} is COOKING, ${hero.pts} points`:''}`
     :split?`🚨 BREAKING: Astroneers split ${word} games on ${dow}, and Coach has questions`
     :`🚨 BREAKING: Astroneers stumble to ${rec} on ${dow}, and Coach is NOT happy`;
   /* lede */
   const l1=win?pick([`FOLKS, the Astroneers just went ${rec} on ${dow}`,`LET'S GOOO. The Astroneers went ${rec} on ${dow}`,`BOOM. The Astroneers went ${rec} on ${dow}`],h):split?pick([`FOLKS, the Astroneers split ${word} games on ${dow} at ${rec}`,`Wild one, folks. The Astroneers went ${rec} on ${dow}`],h):`Rough one, folks. The Astroneers went ${rec} on ${dow}`;
-  const l1b=hero&&hero.pts>0?`${win||split?', and':', with'} ${short(hero.p)} ${win?'was the whole show':'the lone bright spot'}: ${hero.gs} goal${hero.gs===1?'':'s'}, ${hero.as} assist${hero.as===1?'':'s'}, ${hero.pts} points, per the box score.`:'.';
-  const tp=hero&&hero.top&&hero.top.pts>=3?` ${hero.top.pts} of them came against ${hero.top.gm.opp} in a ${score(hero.top.gm)}${hero.top.gm.res.ot?' overtime':''} ${hero.top.gm.res.w?'W':'L'}.`:'';
+  const l1b=gStar?`${win||split?', and':', with'} ${short(gStar.p)} ${win?'was the whole show in the crease':'the lone bright spot'}: ${gStar.sv} saves on ${gStar.sh} shots, ${f1(gStar.sp)}%.${hero&&hero.pts>=5?` Up front, ${short(hero.p)} put up ${hero.pts} points (${hero.gs}G, ${hero.as}A).`:''}`:hero&&hero.pts>0?`${win||split?', and':', with'} ${short(hero.p)} ${win?'was the whole show':'the lone bright spot'}: ${hero.gs} goal${hero.gs===1?'':'s'}, ${hero.as} assist${hero.as===1?'':'s'}, ${hero.pts} points, per the box score.`:'.';
+  const tp=!gStar&&hero&&hero.top&&hero.top.pts>=3?` ${hero.top.pts} of them came against ${hero.top.gm.opp} in a ${score(hero.top.gm)}${hero.top.gm.res.ot?' overtime':''} ${hero.top.gm.res.w?'W':'L'}.`:'';
   const prob=gvAll>tkAll?pick([` The problem? ${gvAll} giveaways to ${tkAll} takeaways. Coach saw every single one.`,` Now the bad news: ${gvAll} giveaways to ${tkAll} takeaways. Coach has the tape and he is NOT smiling.`],h+3):` The good news: we took it away more than we gave it away, ${tkAll} to ${gvAll}. Clean hockey, folks.`;
   const lede=l1+l1b+tp+prob;
   /* details */
