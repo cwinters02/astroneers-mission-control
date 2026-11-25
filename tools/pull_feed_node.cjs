@@ -26,7 +26,14 @@ function clubFrom(st) {
   return {positionCount: rep.b[0].positionCount, clubStats: (rep.b[1] || [])[0] || {}, club: (rep.b[2] || {})[ME] || {},
     members: (rep.b[0].members || []).filter(m => MAP[m.name]).map(m => ({...m, name: MAP[m.name]}))};
 }
-function gamesFrom(raw) {
+const DROP = new Set(['playername','teamArtAbbr','opponentTeamArtAbbr','opponentClubId','opponentTeamId','teamId','memberString','scoreString','posSorted','teamSide','opponentScore','score','scoreRaw','result','pNhlOnlineGameType','ranktierassetid']);
+function allKeys(raw) {
+  const extra = new Set();
+  raw.forEach(arr => (arr || []).forEach(m => Object.values((m.players && m.players[ME]) || {}).forEach(p => Object.keys(p).forEach(k => { if (!KEYS.includes(k) && !DROP.has(k)) extra.add(k); }))));
+  return [...KEYS, ...[...extra].sort()];
+}
+function gamesFrom(raw, cols) {
+  cols = cols || KEYS;
   const games = [];
   raw.forEach((arr, i) => (arr || []).forEach(m => {
     if (!m.clubs || !m.clubs[ME]) return;
@@ -40,16 +47,18 @@ function gamesFrom(raw) {
       usDivision: Number(us.clubDivision), oppDivision: Number(th.clubDivision),
       usDnfWin: Number(us.winnerByDnf || 0), oppDnfWin: Number(th.winnerByDnf || 0),
       oppGoalie: g ? {shots: Number(g.glshots), saves: Number(g.glsaves), toi: Number(g.toiseconds)} : null, oppPlayers: oppRows.length,
-      rows: Object.values((m.players && m.players[ME]) || {}).map(p => [MAP[p.playername] || 'Astroneers guest', ...KEYS.map(k => num(p[k]))])
+      rows: Object.values((m.players && m.players[ME]) || {}).map(p => [MAP[p.playername] || 'Astroneers guest', ...cols.map(k => num(p[k]))])
     });
   }));
   return games;
 }
-module.exports = {parseNgState, clubFrom, gamesFrom};
+module.exports = {parseNgState, clubFrom, gamesFrom, allKeys};
 if (require.main === module) (async () => {
   const r = await fetch(`https://stats.chelhead.com/club-matches?platform=common-gen5&clubId=${ME}&matchType=all`, {headers: H});
   if (!r.ok) { console.error('FAILED matches feed HTTP ' + r.status); process.exit(1); }
-  const games = gamesFrom(await r.json());
+  const raw = await r.json(), cols = allKeys(raw), games = gamesFrom(raw, cols);
+  console.log('player row columns: ' + cols.length + ' (' + (cols.length - KEYS.length) + ' beyond the basic set)');
+  console.log('extra columns: ' + cols.slice(KEYS.length).join(','));
   if (!games.length) { console.error('FAILED matches feed returned no games'); process.exit(1); }
   let club = null;
   try {
@@ -57,6 +66,6 @@ if (require.main === module) (async () => {
     if (p.ok) { const st = parseNgState(await p.text()); club = st && clubFrom(st); }
     else console.error('club page HTTP ' + p.status);
   } catch (e) { console.error('club page: ' + e.message); }
-  fs.writeFileSync(out, JSON.stringify({pulledAt: new Date().toISOString(), keys: ['name', ...KEYS], games, club}));
+  fs.writeFileSync(out, JSON.stringify({pulledAt: new Date().toISOString(), keys: ['name', ...cols], games, club}));
   console.log(`pulled ${games.length} games, club report ${club ? club.members.length + ' members' : 'MISSING'}`);
 })();
