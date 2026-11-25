@@ -20,7 +20,7 @@ const srv = http.createServer((q, r) => { let p = q.url.split('?')[0]; if (p ===
   fs.readFile(path.join(dir, p), (e, d) => { if (e) { r.writeHead(404); r.end(); return; }
     r.writeHead(200, {'content-type': p.endsWith('.json') ? 'application/json' : 'text/html'}); r.end(d); }); });
 srv.listen(0, async () => {
-  const b = await chromium.launch(), pg = await b.newPage();
+  const b = await chromium.launch(process.env.CHROMIUM_PATH?{executablePath:process.env.CHROMIUM_PATH}:{}), pg = await b.newPage();
   await pg.goto('http://127.0.0.1:' + srv.address().port + '/'); await pg.waitForTimeout(1500);
   for (const n of todo) {
     const rep = await pg.evaluate(n => { const r = window.AST.buildReport(n); return r ? JSON.stringify(r) : null; }, n);

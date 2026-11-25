@@ -4,7 +4,7 @@ const {chromium}=require('playwright');const http=require('http'),fs=require('fs
 const ROOT=process.argv[2]||'.';const mime={'.html':'text/html','.json':'application/json','.png':'image/png'};
 const tabs=['home','coach','players','games','compare','lineups','ratings','club','trophies','profile','stats'];
 const srv=http.createServer((q,r)=>{let p=q.url.split('?')[0];if(p==='/')p='/index.html';fs.readFile(path.join(ROOT,p),(e,d)=>{if(e){r.writeHead(404);r.end();return}r.writeHead(200,{'content-type':mime[path.extname(p)]||'x'});r.end(d)})}).listen(0,async()=>{
- const b=await chromium.launch();const pg=await b.newPage({viewport:{width:390,height:844}});const bad=[];
+ const b=await chromium.launch(process.env.CHROMIUM_PATH?{executablePath:process.env.CHROMIUM_PATH}:{});const pg=await b.newPage({viewport:{width:390,height:844}});const bad=[];
  pg.on('pageerror',e=>bad.push('pageerror '+e.message));pg.on('console',m=>m.type()==='error'&&bad.push('console '+m.text()));
  const base='http://127.0.0.1:'+srv.address().port+'/';
  for(const t of tabs){await pg.goto(base+'#'+t);await pg.waitForTimeout(500);await pg.evaluate(()=>window.dispatchEvent(new Event('hashchange')));await pg.waitForTimeout(200);
