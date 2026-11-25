@@ -1059,6 +1059,19 @@ function skaterSignal(items){
   if(w<.5)return null;
   return s/w;
 }
+/* goalie signal: items [{r,g}] -> [-1,1]. save %, saves above average (volume at a good %), goals against, special saves, pokechecks, win, shutout */
+function goalieSignal(items,B){
+  const base=(B&&B.goalie&&B.goalie.savePct)||.704;
+  let sh=0,sv=0,ga=0,sp=0,pk=0,w=0,nw=0,so=0;const c=items.length;
+  items.forEach(({r,g})=>{sh+=n(r.glshots);sv+=n(r.glsaves);ga+=n(r.glga);sp+=n(r.glbrksaves)+n(r.glpensaves)+n(r.gldsaves);pk+=n(r.glpokechecks);const x=g?winOf(g):null;if(x!=null){w+=x;nw++}so+=n(r.glso)>0?1:0});
+  if(!sh||!c)return null;
+  const svp=clamp((sv/sh-base)/.12,-1,1);
+  const gsaa=clamp((sv-base*sh)/c/2.5,-1,1);
+  const gag=clamp((3-ga/c)/3,-1,1);
+  const spc=clamp((sp/c-.5)/1.5,-1,1);
+  const pkc=clamp((pk/c-1.5)/3,-1,1);
+  const W=[[svp,.45],[gsaa,.15],[gag,.10],[spc,.05],[pkc,.05],[nw?clamp(w/nw,-1,1):null,.15],[so?1:null,.05]];
+  let tw=0,ts=0;W.forEach(([v,x])=>{if(v!=null){tw+=x;ts+=v*x}});return ts/tw}
 function computeGrades(){
   const rowF=new Map(),rowG=new Map();
   const B=(M.gradingBenchmarks&&M.gradingBenchmarks.roles)||{};
@@ -1074,7 +1087,7 @@ function computeGrades(){
         const gr=rows.filter(r=>r.position==='goalie'&&n(r.glshots)>0);
         if(!gr.length)return;
         const sh=gr.reduce((a,r)=>a+n(r.glshots),0),sv=gr.reduce((a,r)=>a+n(r.glsaves),0);
-        const sig=clamp((sv/sh-(B.goalie&&B.goalie.savePct||.704))/.12,-1,1);
+        const sig=goalieSignal(gr.map(r=>({r,g:rowG.get(r)})),B)??0;
         const score=clamp(Math.round(78+25*sig),0,99);
         res.rows[p.key]={score,grade:letter(score),n:gr.length,prov:gr.length<5,detail:`${sv} saves on ${sh} shots (${(sv/sh*100).toFixed(1)}%)`,personal:null};
         hist[p.key].push({goalie:true,sv,sh});
@@ -1327,8 +1340,8 @@ function putIn(h,marker,html){if(!html)return h;const i=h.indexOf(marker);if(i<0
 
 /* ---------- COACH FINKLESTEIN report builder (same format the Coach tab already reads) ---------- */
 function overallAt(p,night){
-  if(p.isG){let sh=0,sv=0,c=0;SESS.forEach(s=>{if(!/^\d{4}/.test(s.key)||s.key>night)return;s.games.forEach(g=>g.rows.forEach(r=>{if(r.name===p.key&&r.position==='goalie'&&n(r.glshots)>0){sh+=n(r.glshots);sv+=n(r.glsaves);c++}}))});
-    if(c<3||!sh)return null;return clamp(Math.round(70+25*clamp((sv/sh-.704)/.12,-1,1)),25,99)}
+  if(p.isG){const it=[];SESS.forEach(s=>{if(!/^\d{4}/.test(s.key)||s.key>night)return;s.games.forEach(g=>g.rows.forEach(r=>{if(r.name===p.key&&r.position==='goalie'&&n(r.glshots)>0)it.push({r,g})}))});
+    if(it.length<3)return null;const sg=goalieSignal(it,(M.gradingBenchmarks&&M.gradingBenchmarks.roles)||{});return sg==null?null:clamp(Math.round(70+25*sg),25,99)}
   const B=(M.gradingBenchmarks&&M.gradingBenchmarks.roles)||{};const items=[];
   SESS.forEach(s=>{if(!/^\d{4}/.test(s.key)||s.key>night)return;s.games.forEach(g=>{const f=gameCtx(g).f*gameEnv(g);g.rows.forEach(r=>{if(r.name===p.key&&r.position!=='goalie'&&isActive(r)&&B[rkey(r.position)])items.push({r,b:B[rkey(r.position)],role:rkey(r.position),f,sw:slotMult(p.key),iv:involve(r,g),w:winOf(g)})})})});
   if(items.length<3)return null;const sg=skaterSignal(items);return sg==null?null:clamp(Math.round(70+25*sg),25,99);
